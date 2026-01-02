@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Media Downloader - Download Videos Instantly</title>
+    <meta name="description" content="Download videos from YouTube, Instagram, TikTok, and more with just a URL paste">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>
+                <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Social Media Downloader
+            </h1>
+            <p class="subtitle">Download videos from YouTube, Instagram, TikTok, and more</p>
+        </header>
+
+        <main>
+            <div class="input-section">
+                <div class="input-wrapper">
+                    <input 
+                        type="text" 
+                        id="urlInput" 
+                        placeholder="Paste video URL here..."
+                        autocomplete="off"
+                    >
+                    <div class="input-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                        </svg>
+                    </div>
+                </div>
+                <p class="hint">Paste a URL to automatically fetch video details</p>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loadingState" class="loading-state hidden">
+                <div class="spinner"></div>
+                <p>Fetching video information...</p>
+            </div>
+
+            <!-- Error Message -->
+            <div id="errorMessage" class="error-message hidden">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <p id="errorText"></p>
+            </div>
+
+            <!-- Video Card -->
+            <div id="videoCard" class="video-card hidden">
+                <div class="video-thumbnail">
+                    <img id="thumbnail" src="" alt="Video thumbnail">
+                    <div class="duration-badge" id="durationBadge"></div>
+                </div>
+                <div class="video-info">
+                    <h2 id="videoTitle"></h2>
+                    <div class="video-meta">
+                        <span id="videoUploader"></span>
+                        <span class="separator">•</span>
+                        <span id="videoPlatform"></span>
+                    </div>
+                </div>
+
+                <!-- Progress Bar -->
+                <div id="progressContainer" class="progress-container hidden">
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill"></div>
+                    </div>
+                    <p id="progressText" class="progress-text">0%</p>
+                </div>
+
+                <!-- Download Button -->
+                <button id="downloadBtn" class="download-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span id="downloadBtnText">Download Video</span>
+                </button>
+
+                <!-- Success Message -->
+                <div id="successMessage" class="success-message hidden">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    <p>Video saved to your Downloads folder!</p>
+                </div>
+            </div>
+
+            <!-- Supported Platforms -->
+            <div class="platforms-section">
+                <h3>Supported Platforms</h3>
+                <div class="platforms-grid">
+                    <div class="platform-badge">YouTube</div>
+                    <div class="platform-badge">Instagram</div>
+                    <div class="platform-badge">TikTok</div>
+                    <div class="platform-badge">Facebook</div>
+                    <div class="platform-badge">Twitter/X</div>
+                    <div class="platform-badge">Vimeo</div>
+                </div>
+                <p class="platforms-note">
+                    ✨ TikTok videos download <strong>without watermark</strong><br>
+                    ✨ Instagram videos in <strong>HD quality</strong>
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

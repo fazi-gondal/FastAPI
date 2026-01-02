@@ -1,0 +1,14 @@
+# Tell GitHub this is a Python project
+*.py linguist-language=Python
+
+# Exclude static files from language statistics
+static/* linguist-vendored
+*.css linguist-vendored
+*.js linguist-vendored
+*.html linguist-documentation
+
+# Exclude documentation from statistics
+*.md linguist-documentation
+
+# Ensure Python is detected
+*.py linguist-detectable=true
