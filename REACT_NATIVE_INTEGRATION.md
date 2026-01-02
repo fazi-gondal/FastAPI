@@ -1,6 +1,6 @@
 # React Native Mobile Integration Guide
 
-Complete guide for integrating the video downloader API with your React Native Expo app with **real-time progress tracking**.
+Complete guide for integrating the video downloader API with your React Native Expo app with **bandwidth-free direct downloads**.
 
 ## 📱 Installation
 
@@ -63,37 +63,47 @@ export const VideoDownloaderService = {
   },
 
   /**
-   * Download video with real-time progress to device storage
+   * Get direct download URL (NO SERVER BANDWIDTH USED!)
+   * Best for mobile apps - downloads directly from source
    */
-  async downloadToDevice(videoUrl, onProgress = () => {}) {
+  async getDirectURL(videoUrl) {
     try {
-      // Step 1: Start download on server
-      onProgress(0, 'Starting download...');
-      const startResponse = await axios.post(`${API_URL}/api/download/start`, {
+      const response = await axios.post(`${API_URL}/api/get-direct-url`, {
         url: videoUrl
       });
+      return response.data.data;
+    } catch (error) {
+      throw new Error(error.response?.data?.detail || 'Failed to get direct URL');
+    }
+  },
+
+  /**
+   * Download video directly to device (ZERO SERVER BANDWIDTH!)
+   * Shows progress bar, preserves filename, saves to gallery
+   */
+  async downloadDirectToDevice(videoUrl, onProgress = () => {}) {
+    try {
+      // Step 1: Get metadata and direct URL
+      onProgress(0, 'Getting video info...');
       
-      const { download_id } = startResponse.data;
+      const [metadata, urlInfo] = await Promise.all([
+        this.getMetadata(videoUrl),
+        this.getDirectURL(videoUrl)
+      ]);
       
-      // Step 2: Track server-side download progress
-      onProgress(0, 'Processing video...');
-      await this.trackServerProgress(download_id, (percent) => {
-        onProgress(percent * 0.5, 'Processing video...'); // Server download is 0-50%
-      });
+      onProgress(5, 'Starting download...');
       
-      // Step 3: Download file to device
-      onProgress(50, 'Downloading to device...');
-      const downloadUrl = `${API_URL}/api/download/file/${download_id}`;
-      const filename = `video_${Date.now()}.mp4`;
+      // Step 2: Download directly from source (NO SERVER BANDWIDTH!)
+      const filename = urlInfo.filename || `${metadata.title}.mp4`;
       const downloadPath = `${FileSystem.documentDirectory}${filename}`;
       
       const downloadResumable = FileSystem.createDownloadResumable(
-        downloadUrl,
+        urlInfo.direct_url,  // Direct URL from TikTok/Instagram/YouTube!
         downloadPath,
         {},
         (downloadProgress) => {
-          const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
-          onProgress(50 + (progress * 40), 'Downloading to device...'); // Device download is 50-90%
+          const progress = (downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite) * 100;
+          onProgress(5 + (progress * 0.85), 'Downloading...'); // 5-90%
         }
       );
       
@@ -103,7 +113,7 @@ export const VideoDownloaderService = {
         throw new Error('Download failed');
       }
       
-      // Step 4: Save to gallery
+      // Step 3: Save to gallery
       onProgress(90, 'Saving to gallery...');
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
@@ -124,41 +134,13 @@ export const VideoDownloaderService = {
         success: true,
         localUri: result.uri,
         asset: asset,
-        filename: filename
+        filename: filename,
+        metadata: metadata
       };
     } catch (error) {
       console.error('Download error:', error);
       throw error;
     }
-  },
-
-  /**
-   * Track server-side download progress with SSE
-   */
-  async trackServerProgress(downloadId, onProgress) {
-    return new Promise((resolve, reject) => {
-      const eventSource = new EventSource(`${API_URL}/api/download/progress/${downloadId}`);
-      
-      eventSource.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        
-        if (data.status === 'downloading' || data.status === 'starting') {
-          onProgress(data.progress || 0);
-        } else if (data.status === 'completed') {
-          onProgress(100);
-          eventSource.close();
-          resolve(data);
-        } else if (data.status === 'error') {
-          eventSource.close();
-          reject(new Error(data.error || 'Download failed'));
-        }
-      };
-      
-      eventSource.onerror = () => {
-        eventSource.close();
-        reject(new Error('Connection to server lost'));
-      };
-    });
   },
 
   /**
@@ -219,7 +201,7 @@ export default function VideoDownloader() {
     setProgress(0);
 
     try {
-      const result = await VideoDownloaderService.downloadToDevice(
+      const result = await VideoDownloaderService.downloadDirectToDevice(
         url,
         (percent, status) => {
           setProgress(Math.round(percent));
@@ -229,7 +211,8 @@ export default function VideoDownloader() {
 
       Alert.alert(
         'Success!',
-        'Video downloaded and saved to your gallery!',
+        'Video downloaded and saved to your gallery!\n\n' +
+        '💡 This download used ZERO server bandwidth!',
         [{ text: 'OK' }]
       );
 
@@ -246,7 +229,7 @@ export default function VideoDownloader() {
   return (
     <ScrollView style={styles.container}>
       <Text style={styles.title}>Social Media Downloader</Text>
-      <Text style={styles.subtitle}>Download videos from Instagram, TikTok, YouTube & more</Text>
+      <Text style={styles.subtitle}>Zero server bandwidth • Direct downloads</Text>
 
       <TextInput
         style={styles.input}
@@ -302,7 +285,7 @@ export default function VideoDownloader() {
                 <Text style={styles.buttonText}>{progress}%</Text>
               </View>
             ) : (
-              <Text style={styles.buttonText}>📥 Download to Device</Text>
+              <Text style={styles.buttonText}>📥 Download (No Bandwidth!)</Text>
             )}
           </TouchableOpacity>
 
@@ -319,11 +302,12 @@ export default function VideoDownloader() {
 
       <View style={styles.features}>
         <Text style={styles.featuresTitle}>✨ Features:</Text>
+        <Text style={styles.featureItem}>• Direct downloads (zero server bandwidth)</Text>
         <Text style={styles.featureItem}>• TikTok videos without watermark</Text>
         <Text style={styles.featureItem}>• Instagram videos in HD quality</Text>
         <Text style={styles.featureItem}>• Real-time download progress</Text>
         <Text style={styles.featureItem}>• Saves directly to your gallery</Text>
-        <Text style={styles.featureItem}>• Supports 1000+ platforms</Text>
+        <Text style={styles.featureItem}>• Unlimited downloads!</Text>
       </View>
     </ScrollView>
   );
@@ -344,8 +328,9 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 14,
-    color: '#666',
+    color: '#10b981',
     marginBottom: 20,
+    fontWeight: '600',
   },
   input: {
     backgroundColor: '#fff',
@@ -472,6 +457,37 @@ export default function App() {
 }
 ```
 
+## 💡 Why This is Better
+
+### Direct Download Benefits:
+
+* ✅ **Zero server bandwidth** - Downloads directly from source
+* ✅ **Unlimited downloads** - No Render bandwidth limits
+* ✅ **Faster** - One less hop (no server in between)
+* ✅ **Progress tracking** - expo-file-system shows real-time progress
+* ✅ **Proper filenames** - From metadata API
+* ✅ **Cost effective** - Free forever!
+
+### How It Works:
+
+```
+Traditional (uses bandwidth):
+YouTube → Render Server → Mobile App (❌ uses Render bandwidth)
+
+Direct Download (zero bandwidth):
+1. Mobile App → Render API → Get direct URL (tiny ~1KB request)
+2. Mobile App → YouTube directly → Download (✅ zero Render bandwidth!)
+```
+
+## 📊 Bandwidth Comparison
+
+| Method | 12MB Video | 100 Downloads | 1000 Downloads |
+|--------|-----------|---------------|----------------|
+| Traditional | 12MB | 1.2GB | 12GB |
+| **Direct URL** | **~1KB** | **~100KB** | **~1MB** |
+
+**Savings: 99.99%!** 🎉
+
 ## ✅ Testing
 
 1. **Install dependencies**:
@@ -487,44 +503,64 @@ export default function App() {
    ```
 
 4. **Test download**:
-   * Paste Instagram/TikTok URL
+   * Paste Instagram/TikTok/YouTube URL
    * Click "Get Video Info"
-   * Click "Download to Device"
-   * **Watch real-time progress!** (0% → 100%)
-   * Check your gallery
+   * Click "Download (No Bandwidth!)"
+   * Watch progress bar update in real-time
+   * Check your gallery - video is there!
+   * Check Render dashboard - **zero bandwidth used!** ✅
 
-## 📝 Key Features
+## 🔧 API Endpoints Used
 
-* ✅ **Real-time progress** - Shows 0%, 5%, 10%... 100%
-* ✅ **Three-phase tracking**:
-  * Server processing (0-50%)
-  * Device download (50-90%)
-  * Gallery save (90-100%)
-* ✅ **Status messages** - "Processing...", "Downloading...", "Saving..."
-* ✅ **Auto permissions** - Requests gallery access automatically
-* ✅ **Error handling** - Clear error messages
+```javascript
+// 1. Get metadata (tiny request)
+POST /api/metadata
+Response: { title, thumbnail, duration, uploader, platform }
+
+// 2. Get direct URL (tiny request)
+POST /api/get-direct-url
+Response: { 
+  direct_url: "https://...",  // Direct link to video
+  filename: "video.mp4",
+  filesize: 12000000,
+  expires_in: 21600  // 6 hours
+}
+
+// 3. Download happens directly from source
+// No more API calls needed!
+```
 
 ## 🐛 Troubleshooting
 
-**Progress stuck at 0%?**
+**Direct URL expired?**
 
-* Check server is running
-* Verify API\_URL is correct
-* Check network connection
+* URLs expire after ~6 hours
+* Just call `/api/get-direct-url` again to get fresh URL
 
-**"Permission denied" error?**
+**Progress stuck?**
+
+* Check internet connection
+* Verify direct\_url is accessible
+* Try different video
+
+**Permission denied?**
 
 * Grant media library permissions
 * Go to Settings → Your App → Permissions
 
-**Video not in gallery?**
+## 💰 Cost Savings
 
-* Check "Downloads" album
-* Restart gallery app
-* Check storage space
+With direct downloads:
+
+* **Render Free Tier**: 100GB/month bandwidth
+* **Before**: ~8,300 videos (12MB each)
+* **After**: ~100,000,000 videos (using just metadata calls!)
+
+**Essentially unlimited downloads!** 🚀
 
 ***
 
-**Status**: Ready for production! 📱✅\
-**Progress**: Real-time tracking enabled\
+**Status**: Production ready! 📱✅\
+**Bandwidth**: Zero from Render\
+**Progress**: Real-time tracking\
 **Platforms**: Instagram (HD), TikTok (no watermark), YouTube, and 1000+

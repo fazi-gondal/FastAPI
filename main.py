@@ -9,7 +9,7 @@ import asyncio
 import httpx
 import time
 import uuid
-from downloader import get_video_metadata, download_video, get_downloads_folder
+from downloader import get_video_metadata, download_video, get_downloads_folder, get_direct_url
 
 
 # Store download progress globally
@@ -94,6 +94,19 @@ async def fetch_metadata(request: URLRequest):
     try:
         metadata = get_video_metadata(request.url)
         return {"success": True, "data": metadata}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/get-direct-url")
+async def get_video_direct_url(request: URLRequest):
+    """
+    Get direct download URL without using server bandwidth
+    Perfect for mobile apps - downloads directly from source
+    """
+    try:
+        url_info = get_direct_url(request.url)
+        return {"success": True, "data": url_info}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
