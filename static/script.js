@@ -119,18 +119,20 @@ function updateProgress(percent) {
     progressText.textContent = `${Math.round(percent)}%`;
 }
 
-// Download video directly (no progress tracking, no server storage!)
+// Download video with real-time progress
 async function downloadVideo() {
     if (isDownloading || !currentVideoUrl) return;
 
     isDownloading = true;
     downloadBtn.disabled = true;
-    downloadBtnText.textContent = 'Getting download link...';
+    downloadBtnText.textContent = 'Preparing...';
     hideElement(successMessage);
+    showElement(progressContainer);
+    updateProgress(0);
 
     try {
-        // Get the direct download URL (zero storage!)
-        const response = await fetch('/api/get-direct-url', {
+        // Step 1: Start download
+        const startResponse = await fetch('/api/download/start', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -138,50 +140,83 @@ async function downloadVideo() {
             body: JSON.stringify({ url: currentVideoUrl })
         });
 
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || 'Failed to get download link');
+        if (!startResponse.ok) {
+            const errorData = await startResponse.json();
+            throw new Error(errorData.detail || 'Failed to start download');
         }
 
-        const data = await response.json();
+        const { download_id } = await startResponse.json();
+        currentDownloadId = download_id;
 
-        if (!data.success) {
-            throw new Error('Failed to get download URL');
-        }
+        downloadBtnText.textContent = 'Downloading...';
 
-        const { direct_url, filename } = data.data;
-
-        downloadBtnText.textContent = 'Starting download...';
-
-        // Trigger download by opening the direct URL in a new window
-        // This works better than trying to fetch and create a blob
-        const link = document.createElement('a');
-        link.href = direct_url;
-        link.download = filename || 'video.mp4';
-        link.target = '_blank';  // Open in new tab as backup
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        // Show success
-        downloadBtnText.textContent = 'Download started!';
-        showElement(successMessage);
-
-        // Reset after 3 seconds
-        setTimeout(() => {
-            downloadBtn.disabled = false;
-            downloadBtnText.textContent = 'Download Video';
-            isDownloading = false;
-        }, 3000);
+        // Step 2: Track progress using EventSource
+        await trackProgress(download_id);
 
     } catch (error) {
         showError(error.message);
         downloadBtn.disabled = false;
         downloadBtnText.textContent = 'Download Video';
         isDownloading = false;
+        hideElement(progressContainer);
     }
 }
 
+// Track download progress with Server-Sent Events
+async function trackProgress(downloadId) {
+    return new Promise((resolve, reject) => {
+        const eventSource = new EventSource(`/api/download/progress/${downloadId}`);
+
+        eventSource.onmessage = async (event) => {
+            const data = JSON.parse(event.data);
+
+            if (data.status === 'downloading' || data.status === 'starting') {
+                updateProgress(data.progress || 0);
+            } else if (data.status === 'completed') {
+                updateProgress(100);
+                eventSource.close();
+
+                // Step 3: Download the file
+                downloadBtnText.textContent = 'Getting file...';
+
+                try {
+                    // Trigger file download
+                    const downloadUrl = `/api/download/file/${downloadId}`;
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = data.filename || 'video.mp4';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+
+                    // Show success
+                    downloadBtnText.textContent = 'Downloaded!';
+                    showElement(successMessage);
+
+                    // Reset after 3 seconds
+                    setTimeout(() => {
+                        downloadBtn.disabled = false;
+                        downloadBtnText.textContent = 'Download Video';
+                        isDownloading = false;
+                        hideElement(progressContainer);
+                    }, 3000);
+
+                    resolve();
+                } catch (error) {
+                    reject(error);
+                }
+            } else if (data.status === 'error') {
+                eventSource.close();
+                reject(new Error(data.error || 'Download failed'));
+            }
+        };
+
+        eventSource.onerror = (error) => {
+            eventSource.close();
+            reject(new Error('Connection to server lost'));
+        };
+    });
+}
 
 // Auto-fetch on paste
 urlInput.addEventListener('paste', (e) => {

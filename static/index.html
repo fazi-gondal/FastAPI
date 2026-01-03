@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,6 +11,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
+
 <body>
     <div class="container">
         <header>
@@ -27,12 +29,7 @@
         <main>
             <div class="input-section">
                 <div class="input-wrapper">
-                    <input 
-                        type="text" 
-                        id="urlInput" 
-                        placeholder="Paste video URL here..."
-                        autocomplete="off"
-                    >
+                    <input type="text" id="urlInput" placeholder="Paste video URL here..." autocomplete="off">
                     <div class="input-icon">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
@@ -74,6 +71,14 @@
                     </div>
                 </div>
 
+                <!-- Progress Bar -->
+                <div id="progressContainer" class="progress-container hidden">
+                    <div class="progress-bar">
+                        <div id="progressFill" class="progress-fill"></div>
+                    </div>
+                    <p id="progressText" class="progress-text">0%</p>
+                </div>
+
                 <!-- Download Button -->
                 <button id="downloadBtn" class="download-btn">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -89,7 +94,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="20 6 9 17 4 12"></polyline>
                     </svg>
-                    <p>Download started! Check your browser downloads.</p>
+                    <p>Video saved to your Downloads folder!</p>
                 </div>
             </div>
 
@@ -114,4 +119,5 @@
 
     <script src="/static/script.js"></script>
 </body>
+
 </html>
