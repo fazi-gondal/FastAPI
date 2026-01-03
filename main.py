@@ -9,7 +9,7 @@ import asyncio
 import httpx
 import time
 import uuid
-from downloader import get_video_metadata, download_video, get_downloads_folder, get_direct_url
+from downloader import get_video_metadata, download_video, get_downloads_folder, get_direct_url, stream_video_download
 
 
 # Store download progress globally
@@ -256,6 +256,34 @@ def cleanup_progress(download_id: str):
             del download_progress[download_id]
     except Exception as e:
         print(f"Progress cleanup error: {e}")
+
+
+@app.post("/api/stream")
+async def stream_download(request: URLRequest):
+    """
+    Stream video download without saving to disk (ZERO storage usage!)
+    Perfect for Vercel - no temp_downloads needed at all
+    Returns redirect to direct video URL
+    """
+    try:
+        # Get direct URL and filename without downloading
+        direct_url, filename = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: stream_video_download(request.url)
+        )
+        
+        # Redirect to direct URL (client downloads from source)
+        # This is the BEST option for Vercel - zero storage, zero bandwidth!
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(
+            url=direct_url,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"'
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/thumbnail")

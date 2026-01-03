@@ -3,38 +3,48 @@ import os
 from pathlib import Path
 import re
 import time
+import io
 
 
 def get_downloads_folder():
     """Get appropriate downloads folder based on environment (serverless vs local)"""
     # Check if running on serverless platform (Vercel, AWS Lambda, etc.)
+    # Multiple detection methods for reliability
     is_serverless = (
-        os.getenv('VERCEL') or 
+        # Check for Vercel/Lambda specific directories
+        os.path.exists('/var/task') or 
+        # Check environment variables
+        os.getenv('VERCEL') == '1' or 
         os.getenv('AWS_LAMBDA_FUNCTION_NAME') or
         os.getenv('NETLIFY') or
-        # Additional check: /tmp exists but typical home directories don't
-        (os.path.exists('/tmp') and not os.path.exists('/home') and os.name != 'nt')
+        os.getenv('VERCEL_ENV') or  # Vercel sets this
+        os.getenv('AWS_EXECUTION_ENV') or  # AWS Lambda sets this
+        # Check if we're in AWS Lambda runtime
+        os.getenv('LAMBDA_TASK_ROOT') or
+        # Fallback: /tmp exists and we can't write to current directory
+        (os.path.exists('/tmp') and not os.access(os.path.dirname(__file__), os.W_OK))
     )
     
     if is_serverless:
         # Use /tmp on serverless platforms (Vercel, AWS Lambda, etc.)
         temp_dir = '/tmp/temp_downloads'
-        print(f"Serverless environment detected, using {temp_dir}")
+        print(f"[SERVERLESS] Using {temp_dir}")
     else:
         # Use project directory for local development
         temp_dir = os.path.join(os.path.dirname(__file__), 'temp_downloads')
+        print(f"[LOCAL] Using {temp_dir}")
     
     # Create directory if it doesn't exist
     try:
         if not os.path.exists(temp_dir):
             os.makedirs(temp_dir, exist_ok=True)
-            print(f"Created temp directory: {temp_dir}")
+            print(f"[OK] Created temp directory: {temp_dir}")
     except Exception as e:
-        print(f"Warning: Could not create temp directory {temp_dir}: {e}")
+        print(f"[WARNING] Could not create temp directory {temp_dir}: {e}")
         # Fallback to /tmp if creation fails
         if not is_serverless:
             temp_dir = '/tmp'
-            print(f"Falling back to {temp_dir}")
+            print(f"[FALLBACK] Using {temp_dir}")
     
     return temp_dir
 
@@ -152,6 +162,53 @@ def get_direct_url(url: str):
             }
     except Exception as e:
         raise Exception(f"Failed to get direct URL: {str(e)}")
+
+
+def stream_video_download(url: str):
+    """
+    Stream video download without saving to disk
+    Returns a generator that yields video chunks
+    """
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'format': 'best',
+        'no_check_certificate': True,
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    }
+    
+    # Add cookie support if available
+    cookies_file = os.path.join(os.path.dirname(__file__), 'cookies.txt')
+    if os.path.exists(cookies_file):
+        ydl_opts['cookiefile'] = cookies_file
+    
+    # Platform-specific format selection
+    if 'tiktok.com' in url or 'vm.tiktok.com' in url or 'vt.tiktok.com' in url:
+        ydl_opts['format'] = 'best/bestvideo+bestaudio/best'
+    elif 'instagram.com' in url:
+        ydl_opts['format'] = 'best[height>=720]/best'
+    elif 'youtube.com' in url or 'youtu.be' in url:
+        ydl_opts['format'] = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
+    
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            
+            # Get the direct URL
+            if 'url' in info:
+                direct_url = info['url']
+            elif 'formats' in info and len(info['formats']) > 0:
+                direct_url = info['formats'][-1]['url']
+            else:
+                raise Exception("Could not extract direct URL")
+            
+            # Get filename
+            title = info.get('title', 'video')
+            filename = sanitize_filename(title) + '.mp4'
+            
+            return direct_url, filename
+    except Exception as e:
+        raise Exception(f"Failed to stream video: {str(e)}")
 
 
 
