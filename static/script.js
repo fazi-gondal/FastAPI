@@ -125,12 +125,12 @@ async function downloadVideo() {
 
     isDownloading = true;
     downloadBtn.disabled = true;
-    downloadBtnText.textContent = 'Starting download...';
+    downloadBtnText.textContent = 'Getting download link...';
     hideElement(successMessage);
 
     try {
-        // Use the stream endpoint for direct download (zero storage!)
-        const response = await fetch('/api/stream', {
+        // Get the direct download URL (zero storage!)
+        const response = await fetch('/api/get-direct-url', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -140,37 +140,31 @@ async function downloadVideo() {
 
         if (!response.ok) {
             const errorData = await response.json();
-            throw new Error(errorData.detail || 'Failed to download video');
+            throw new Error(errorData.detail || 'Failed to get download link');
         }
 
-        // Response will be a redirect to the direct video URL
-        // Browser automatically handles the download
-        downloadBtnText.textContent = 'Redirecting...';
-        
-        // Create a hidden link and click it to trigger download
-        const blob = await response.blob();
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        
-        // Get filename from Content-Disposition header if available
-        const contentDisposition = response.headers.get('Content-Disposition');
-        let filename = 'video.mp4';
-        if (contentDisposition) {
-            const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-            if (filenameMatch && filenameMatch[1]) {
-                filename = filenameMatch[1].replace(/['"]/g, '');
-            }
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error('Failed to get download URL');
         }
-        
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(downloadUrl);
+
+        const { direct_url, filename } = data.data;
+
+        downloadBtnText.textContent = 'Starting download...';
+
+        // Trigger download by opening the direct URL in a new window
+        // This works better than trying to fetch and create a blob
+        const link = document.createElement('a');
+        link.href = direct_url;
+        link.download = filename || 'video.mp4';
+        link.target = '_blank';  // Open in new tab as backup
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
 
         // Show success
-        downloadBtnText.textContent = 'Downloaded!';
+        downloadBtnText.textContent = 'Download started!';
         showElement(successMessage);
 
         // Reset after 3 seconds
