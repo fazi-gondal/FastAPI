@@ -1,3 +1,162 @@
+# Deployment Guide
+
+This guide covers deployment to various platforms including Vercel and Koyeb.
+
+***
+
+## 🔵 Vercel Deployment
+
+### Overview
+
+Vercel is a serverless platform that makes deployment easy with automatic Git integration. This API is fully compatible with Vercel.
+
+### Important: File Storage on Vercel
+
+Vercel serverless functions have a **read-only filesystem** except for `/tmp` directory:
+
+* ✅ **Automatic Detection**: The app automatically detects Vercel environment and uses `/tmp/temp_downloads`
+* 📦 **Storage Limit**: `/tmp` has 512MB limit
+* ⏱️ **Ephemeral**: Files are deleted after the function execution completes
+* 🔄 **Perfect for**: Temporary downloads that are immediately served to users
+
+### Prerequisites
+
+1. **Vercel Account**: Sign up at https://vercel.com
+2. **GitHub Account**: Your code should be in a GitHub repository
+3. **Git Installed**: To push your code
+
+### Deployment Steps
+
+#### Option 1: Deploy via Vercel Dashboard (Recommended)
+
+1. **Push to GitHub**:
+   ```bash
+   cd d:\Python\FastAPI
+   git add .
+   git commit -m "Add Vercel support"
+   git push origin main
+   ```
+
+2. **Import Project on Vercel**:
+   * Go to https://vercel.com/new
+   * Import your GitHub repository
+   * Vercel will auto-detect it as a Python project
+
+3. **Configure Project**:
+   * **Framework Preset**: Other
+   * **Build Command**: (leave empty)
+   * **Output Directory**: (leave empty)
+   * **Install Command**: `pip install -r requirements.txt`
+
+4. **Deploy**:
+   * Click "Deploy"
+   * Wait for deployment (2-5 minutes)
+   * Your API will be live at `https://your-project.vercel.app`
+
+#### Option 2: Deploy via Vercel CLI
+
+1. **Install Vercel CLI**:
+   ```bash
+   npm install -g vercel
+   ```
+
+2. **Login to Vercel**:
+   ```bash
+   vercel login
+   ```
+
+3. **Deploy**:
+   ```bash
+   cd d:\Python\FastAPI
+   vercel --prod
+   ```
+
+### Configuration File
+
+The project includes `vercel.json` with optimized settings:
+
+```json
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "main.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb"
+      }
+    }
+  ],
+  "functions": {
+    "main.py": {
+      "memory": 3008,
+      "maxDuration": 60
+    }
+  }
+}
+```
+
+**Key Settings**:
+
+* **memory**: 3008MB (maximum for better performance)
+* **maxDuration**: 60 seconds (Hobby plan limit)
+* **maxLambdaSize**: 50MB (includes yt-dlp and dependencies)
+
+### Environment Variables
+
+The app automatically detects Vercel via the `VERCEL` environment variable (set automatically by Vercel).
+
+**Optional**: Add custom environment variables in Vercel Dashboard → Settings → Environment Variables
+
+### Testing Your Deployed API
+
+1. **Get your Vercel URL** from the deployment output
+2. **Test endpoints**:
+   ```bash
+   # Test homepage
+   curl https://your-project.vercel.app/
+
+   # Test metadata endpoint
+   curl -X POST https://your-project.vercel.app/api/metadata \
+     -H "Content-Type: application/json" \
+     -d '{"url":"https://www.instagram.com/reel/xxxxx/"}'
+   ```
+
+### Vercel-Specific Limitations
+
+1. **Execution Time**: 60 seconds max on Hobby plan (10 seconds on free)
+2. **File Size**: Downloads work, but very large files (>100MB) may timeout
+3. **/tmp Storage**: 512MB maximum
+4. **Concurrent Executions**: Limited by plan
+
+**Solutions for Large Files**:
+
+* Use the `/api/get-direct-url` endpoint for large files (mobile apps download directly)
+* Upgrade to Pro plan for longer timeouts (5 minutes)
+* Consider alternative platforms for very large video downloads
+
+### Automatic Redeployment
+
+Vercel automatically redeploys when you push to GitHub:
+
+```bash
+git add .
+git commit -m "Update features"
+git push origin main
+# Vercel automatically redeploys
+```
+
+### Monitoring
+
+View logs and analytics:
+
+1. Go to Vercel Dashboard
+2. Select your project
+3. Check **Deployments** tab for logs
+4. Check **Analytics** for usage metrics
+
+***
+
 # Koyeb Deployment Guide
 
 Step-by-step guide to deploy your Social Media Downloader API to Koyeb.

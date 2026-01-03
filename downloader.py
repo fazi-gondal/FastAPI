@@ -6,12 +6,36 @@ import time
 
 
 def get_downloads_folder():
-    """Get a temporary downloads folder in the project directory"""
-    # Use project directory's temp folder instead of system Downloads
-    temp_dir = os.path.join(os.path.dirname(__file__), 'temp_downloads')
+    """Get appropriate downloads folder based on environment (serverless vs local)"""
+    # Check if running on serverless platform (Vercel, AWS Lambda, etc.)
+    is_serverless = (
+        os.getenv('VERCEL') or 
+        os.getenv('AWS_LAMBDA_FUNCTION_NAME') or
+        os.getenv('NETLIFY') or
+        # Additional check: /tmp exists but typical home directories don't
+        (os.path.exists('/tmp') and not os.path.exists('/home') and os.name != 'nt')
+    )
+    
+    if is_serverless:
+        # Use /tmp on serverless platforms (Vercel, AWS Lambda, etc.)
+        temp_dir = '/tmp/temp_downloads'
+        print(f"Serverless environment detected, using {temp_dir}")
+    else:
+        # Use project directory for local development
+        temp_dir = os.path.join(os.path.dirname(__file__), 'temp_downloads')
+    
     # Create directory if it doesn't exist
-    if not os.path.exists(temp_dir):
-        os.makedirs(temp_dir)
+    try:
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir, exist_ok=True)
+            print(f"Created temp directory: {temp_dir}")
+    except Exception as e:
+        print(f"Warning: Could not create temp directory {temp_dir}: {e}")
+        # Fallback to /tmp if creation fails
+        if not is_serverless:
+            temp_dir = '/tmp'
+            print(f"Falling back to {temp_dir}")
+    
     return temp_dir
 
 
