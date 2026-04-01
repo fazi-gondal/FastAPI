@@ -78,54 +78,105 @@ def get_video_metadata(url: str):
 
 def get_direct_url(url: str):
     """
-    Get direct download URL without downloading the video
-    Perfect for mobile apps to save server bandwidth
+    Get direct download URL without downloading the video.
+    Returns the CDN URL + any required HTTP headers so the client
+    can download straight from the source (no server bandwidth used).
     """
+    is_tiktok    = 'tiktok.com' in url or 'vm.tiktok.com' in url or 'vt.tiktok.com' in url
+    is_instagram = 'instagram.com' in url
+    is_youtube   = 'youtube.com' in url or 'youtu.be' in url
+
+    # Build base yt-dlp options exactly as the original repo did
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
         'format': 'best',
         'no_check_certificate': True,
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'user_agent': (
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) '
+            'Chrome/120.0.0.0 Safari/537.36'
+        ),
     }
-    
-    # Add cookie support if available
+
+    # Cookies support
     cookies_file = os.path.join(os.path.dirname(__file__), 'cookies.txt')
     if os.path.exists(cookies_file):
         ydl_opts['cookiefile'] = cookies_file
-    
-    # Platform-specific format selection
-    if 'tiktok.com' in url or 'vm.tiktok.com' in url or 'vt.tiktok.com' in url:
-        ydl_opts['format'] = 'best/bestvideo+bestaudio/best'
-    elif 'instagram.com' in url:
-        ydl_opts['format'] = 'best[height>=720]/best'
-    elif 'youtube.com' in url or 'youtu.be' in url:
-        ydl_opts['format'] = 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best'
-    
+
+    # ── Platform overrides (Original Repo logic + TikTok patch) ────────────
+    if is_tiktok:
+        ydl_opts.update({
+            'format': 'download_addr_2/download_addr/play_addr/best/bestvideo+bestaudio',
+            'http_headers': {
+                'User-Agent': ydl_opts['user_agent'],
+                'Referer': 'https://www.tiktok.com/',
+            },
+            'extractor_args': {
+                'tiktok': {
+                    'api_hostname': ['api22-normal-c-useast2a.tiktokv.com'],
+                    'app_version': ['300904'],
+                }
+            },
+        })
+
+    elif is_instagram:
+        ydl_opts.update({
+            # The exact original format from this repo that perfectly gets IG media with audio
+            'format': 'best[height>=720]/best',
+            'http_headers': {
+                'User-Agent': ydl_opts['user_agent'],
+            },
+        })
+
+    elif is_youtube:
+        ydl_opts.update({
+            'format': 'best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best',
+        })
+
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-            
-            # Get the direct URL
+
+            # Get the direct URL just like the original repo:
             if 'url' in info:
                 direct_url = info['url']
             elif 'formats' in info and len(info['formats']) > 0:
-                # Get the best format's URL
                 direct_url = info['formats'][-1]['url']
             else:
                 raise Exception("Could not extract direct URL")
-            
-            # Get file info
-            title = info.get('title', 'video')
+
+            # Collect headers the client must send to the CDN
+            cdn_headers = {}
+            for src in (ydl_opts.get('http_headers', {}), info.get('http_headers', {})):
+                if src:
+                    cdn_headers.update(src)
+
+            # Always include User-Agent for mobile proxy calls
+            if 'User-Agent' not in cdn_headers:
+                cdn_headers['User-Agent'] = ydl_opts['user_agent']
+
+            title    = info.get('title', 'video')
             filename = sanitize_filename(title) + '.mp4'
-            filesize = info.get('filesize', 0) or info.get('filesize_approx', 0)
-            
+            filesize = info.get('filesize') or info.get('filesize_approx') or 0
+
             return {
-                'direct_url': direct_url,
-                'filename': filename,
-                'filesize': filesize,
-                'expires_in': 21600,  # URLs typically expire in 6 hours
+                'direct_url':  direct_url,
+                'filename':    filename,
+                'filesize':    filesize,
+                'http_headers': cdn_headers,
+                # Route cross-origin links through our Fast proxy so the web browser 
+                # auto-saves instead of opening a new tab. Mobile app ignores this flag.
+                'needs_proxy':  is_tiktok or is_instagram,
+                'use_server_download': False, # We disabled the slow fallback!
+                'expires_in':  21600,
             }
+
+    except yt_dlp.utils.DownloadError as e:
+        error_msg = str(e)
+        if 'Sign in to confirm' in error_msg or 'bot' in error_msg.lower():
+            raise Exception("Bot detection triggered. Add a cookies.txt file.")
+        raise Exception(f"Failed to get direct URL: {error_msg}")
     except Exception as e:
         raise Exception(f"Failed to get direct URL: {str(e)}")
 

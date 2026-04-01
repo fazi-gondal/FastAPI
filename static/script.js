@@ -1,22 +1,33 @@
-// DOM Elements
+/**
+ * DOM Elements
+ */
 const urlInput = document.getElementById('urlInput');
+const getVideoBtn = document.getElementById('getVideoBtn');
+const getVideoBtnText = document.getElementById('getVideoBtnText');
+const featuresSection = document.getElementById('featuresSection');
+
+// Status Contains
+const statusContainer = document.getElementById('statusContainer');
 const loadingState = document.getElementById('loadingState');
+const loadingMsgText = document.getElementById('loadingMsgText');
 const errorMessage = document.getElementById('errorMessage');
 const errorText = document.getElementById('errorText');
+const successMessage = document.getElementById('successMessage');
+
+// Video Card
 const videoCard = document.getElementById('videoCard');
-const downloadBtn = document.getElementById('downloadBtn');
-const downloadBtnText = document.getElementById('downloadBtnText');
 const progressContainer = document.getElementById('progressContainer');
 const progressFill = document.getElementById('progressFill');
 const progressText = document.getElementById('progressText');
-const successMessage = document.getElementById('successMessage');
+const progressPercent = document.getElementById('progressPercent');
 
-// Video metadata storage
-let currentVideoUrl = '';
+// Storage
 let isDownloading = false;
-let currentDownloadId = null;
+let currentVideoUrl = '';
 
-// Format duration from seconds to MM:SS
+/**
+ * Utility functions
+ */
 function formatDuration(seconds) {
     if (!seconds) return '0:00';
     const mins = Math.floor(seconds / 60);
@@ -24,146 +35,317 @@ function formatDuration(seconds) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-// Show/Hide elements
-function showElement(element) {
-    element.classList.remove('hidden');
+function show(element) { element.classList.remove('hidden'); }
+function hide(element) { element.classList.add('hidden'); }
+
+/**
+ * UI State Management
+ */
+function resetUI() {
+    hide(loadingState);
+    hide(errorMessage);
+    hide(successMessage);
+    hide(videoCard);
+    
+    // reset input
+    urlInput.value = '';
+    currentVideoUrl = '';
+    
+    // reset button
+    getVideoBtn.disabled = false;
+    getVideoBtnText.textContent = 'Get Video';
+    
+    // progress
+    progressFill.style.width = '0%';
+    progressPercent.textContent = '0%';
+    progressText.textContent = 'Preparing download...';
+    
+    isDownloading = false;
 }
 
-function hideElement(element) {
-    element.classList.add('hidden');
-}
-
-// Show error message
 function showError(message) {
     errorText.textContent = message;
-    showElement(errorMessage);
-    hideElement(loadingState);
-    hideElement(videoCard);
-}
-
-// Hide error message
-function hideError() {
-    hideElement(errorMessage);
-}
-
-// Reset UI
-function resetUI() {
-    hideElement(loadingState);
-    hideElement(errorMessage);
-    hideElement(videoCard);
-    hideElement(progressContainer);
-    hideElement(successMessage);
-    progressFill.style.width = '0%';
-    progressText.textContent = '0%';
+    hide(loadingState);
+    show(errorMessage);
+    hide(videoCard);
+    
+    getVideoBtn.disabled = false;
+    getVideoBtnText.textContent = 'Try Again';
     isDownloading = false;
-    downloadBtn.disabled = false;
-    downloadBtnText.textContent = 'Download Video';
 }
 
-// Fetch video metadata
-async function fetchMetadata(url) {
-    hideError();
-    hideElement(videoCard);
-    showElement(loadingState);
+function updateProgress(percent, textMsg) {
+    // ensure within 0 - 100
+    const val = Math.max(0, Math.min(100, percent));
+    progressFill.style.width = `${val}%`;
+    progressPercent.textContent = `${Math.round(val)}%`;
+    if (textMsg) progressText.textContent = textMsg;
+}
 
+/**
+ * Core Flow: Click "Get Video" -> Fetch Metadata -> Start Download
+ */
+async function handleGetVideoFlow() {
+    const url = urlInput.value.trim();
+    if (!url || isDownloading) return;
+    
+    currentVideoUrl = url;
+    isDownloading = true;
+    
+    // Prepare UI for flow
+    getVideoBtn.disabled = true;
+    getVideoBtnText.textContent = 'Processing...';
+    
+    hide(errorMessage);
+    hide(successMessage);
+    hide(featuresSection);
+    hide(videoCard);
+    show(loadingState);
+    loadingMsgText.textContent = "Fetching video details...";
+    
     try {
-        const response = await fetch('/api/metadata', {
+        // Step 1: Fetch Metadata
+        const metadataResponse = await fetch('/api/metadata', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ url })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: currentVideoUrl })
         });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-            throw new Error(data.detail || 'Failed to fetch video metadata');
+        
+        const metadataJson = await metadataResponse.json();
+        
+        if (!metadataResponse.ok) {
+            throw new Error(metadataJson.detail || 'Failed to fetch video details.');
         }
-
-        if (data.success) {
-            displayVideoCard(data.data);
-            currentVideoUrl = url;
+        
+        if (!metadataJson.success) {
+            throw new Error('Could not resolve video metadata.');
         }
+        
+        // Hide loader, show the gorgeous tailwind card we built
+        hide(loadingState);
+        displayVideoCard(metadataJson.data);
+        
+        // Step 2: Transition seamlessly to downloading sequence
+        getVideoBtnText.textContent = 'Downloading...';
+        await executeDownloadSequence();
+        
     } catch (error) {
         showError(error.message);
-    } finally {
-        hideElement(loadingState);
     }
 }
 
-// Display video card with metadata
+/**
+ * Populate video card details using Tailwind structure
+ */
 function displayVideoCard(metadata) {
-    // Use thumbnail proxy for platforms with CORS issues
     let thumbnailUrl = metadata.thumbnail;
     const platform = metadata.platform.toLowerCase();
 
-    // Proxy thumbnail for Instagram, TikTok, and other platforms that block CORS
+    // Use proxy for protected CDN images
     if (platform.includes('instagram') || platform.includes('tiktok') || platform.includes('facebook')) {
         thumbnailUrl = `/api/thumbnail?url=${encodeURIComponent(metadata.thumbnail)}`;
     }
 
-    document.getElementById('thumbnail').src = thumbnailUrl;
+    // Replace outer image source dynamically
+    const imgWrapper = videoCard.querySelector('.relative.w-full.aspect-video');
+    imgWrapper.innerHTML = `
+        <img src="${thumbnailUrl}" alt="Video thumbnail" class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105">
+        <div class="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-80"></div>
+        <div class="absolute bottom-3 right-3 bg-slate-900/80 backdrop-blur-sm text-xs font-bold px-2 py-1 rounded text-slate-200">
+            ${formatDuration(metadata.duration)}
+        </div>
+    `;
+
     document.getElementById('videoTitle').textContent = metadata.title;
-    document.getElementById('videoUploader').textContent = metadata.uploader;
+    document.getElementById('videoUploader').textContent = metadata.uploader || 'Unknown User';
     document.getElementById('videoPlatform').textContent = metadata.platform;
-    document.getElementById('durationBadge').textContent = formatDuration(metadata.duration);
-
-    showElement(videoCard);
-    hideElement(successMessage);
+    
+    show(videoCard);
+    
+    // reset progress UI inside card
+    updateProgress(0, 'Resolving direct download link...');
 }
 
-// Update progress bar
-function updateProgress(percent) {
-    progressFill.style.width = `${percent}%`;
-    progressText.textContent = `${Math.round(percent)}%`;
+/**
+ * Handle direct download or proxy stream logic
+ */
+async function executeDownloadSequence() {
+    try {
+        updateProgress(10, 'Getting download link...');
+        
+        // Request the direct url info
+        const res = await fetch('/api/get-direct-url', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: currentVideoUrl })
+        });
+
+        const json = await res.json();
+
+        if (!res.ok) {
+            throw new Error(json.detail || 'Failed to resolve download URL');
+        }
+
+        const { direct_url, filename, http_headers, needs_proxy, use_server_download } = json.data;
+        updateProgress(40, 'Starting download...');
+
+        if (use_server_download) {
+            // Instagram & DASH platforms: yt-dlp downloads + merges on server,
+            // then streams the merged file back to the browser. Guaranteed audio+video.
+            await downloadViaServerStream(filename);
+        } else if (needs_proxy) {
+            // TikTok: single combined CDN file, just proxy the bytes through.
+            await downloadViaProxy(direct_url, filename, http_headers);
+        } else {
+            // Other platforms (Twitter/X, Vimeo, etc): direct CDN link works.
+            await downloadDirectFromCDN(direct_url, filename);
+        }
+
+    } catch (error) {
+        console.warn('Direct URL/Proxy failed, falling back to server download:', error.message);
+        await downloadViaServerFallback();
+    }
 }
 
-// Download video with real-time progress
-async function downloadVideo() {
-    if (isDownloading || !currentVideoUrl) return;
+/**
+ * Proxy stream — server fetches from CDN with required headers and streams bytes
+ */
+async function downloadViaProxy(directUrl, filename, headers) {
+    updateProgress(50, 'Streaming via secure proxy...');
 
-    isDownloading = true;
-    downloadBtn.disabled = true;
-    downloadBtnText.textContent = 'Preparing...';
-    hideElement(successMessage);
-    showElement(progressContainer);
-    updateProgress(0);
+    // Fetch the stream as Blob
+    const res = await fetch('/api/proxy-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            direct_url: directUrl,
+            filename: filename || 'video.mp4',
+            headers: headers || {}
+        })
+    });
+
+    if (!res.ok) {
+        throw new Error('Proxy stream disconnected or failed.');
+    }
+
+    updateProgress(80, 'Receiving high-speed bytes...');
+
+    // Generate blob url and invoke download
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+
+    updateProgress(95, 'Saving file to device...');
+
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename || 'video.mp4';
+    document.body.appendChild(a);
+    a.click();
+    
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+    }, 5000);
+
+    completeDownloadSequence();
+}
+
+/**
+ * Server stream — server downloads via yt-dlp (merging DASH streams) and streams bytes
+ */
+async function downloadViaServerStream(filename) {
+    updateProgress(50, 'Downloading & merging on server...');
+
+    // Fetch the stream as Blob
+    const res = await fetch('/api/server-stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: currentVideoUrl })
+    });
+
+    if (!res.ok) {
+        throw new Error('Server stream disconnected or failed.');
+    }
+
+    updateProgress(80, 'Receiving high-speed bytes...');
+
+    // Generate blob url and invoke download
+    const blob = await res.blob();
+    const blobUrl = URL.createObjectURL(blob);
+
+    updateProgress(95, 'Saving file to device...');
+
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = filename || 'video.mp4';
+    document.body.appendChild(a);
+    a.click();
+    
+    setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(blobUrl);
+    }, 5000);
+
+    completeDownloadSequence();
+}
+
+
+/**
+ * Direct CDN download (best for YouTube, IG)
+ */
+async function downloadDirectFromCDN(directUrl, filename) {
+    return new Promise((resolve, reject) => {
+        updateProgress(70, 'Downloading from source...');
+
+        try {
+            const a = document.createElement('a');
+            a.href = directUrl;
+            a.download = filename || 'video.mp4';
+            // NOTE: do NOT set target='_blank' — that overrides the download
+            // attribute and opens a new tab for cross-origin URLs instead of saving.
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+
+            completeDownloadSequence();
+            resolve();
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
+/**
+ * Server-download fallback for unsupported direct cases
+ */
+async function downloadViaServerFallback() {
+    updateProgress(0, 'Server downloading...');
 
     try {
-        // Step 1: Start download
         const startResponse = await fetch('/api/download/start', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url: currentVideoUrl })
         });
 
         if (!startResponse.ok) {
             const errorData = await startResponse.json();
-            throw new Error(errorData.detail || 'Failed to start download');
+            throw new Error(errorData.detail || 'Failed to start download on server');
         }
 
         const { download_id } = await startResponse.json();
-        currentDownloadId = download_id;
-
-        downloadBtnText.textContent = 'Downloading...';
-
-        // Step 2: Track progress using EventSource
-        await trackProgress(download_id);
-
+        
+        // Track using SSE
+        await trackProgressFromServer(download_id);
     } catch (error) {
         showError(error.message);
-        downloadBtn.disabled = false;
-        downloadBtnText.textContent = 'Download Video';
-        isDownloading = false;
-        hideElement(progressContainer);
     }
 }
 
-// Track download progress with Server-Sent Events
-async function trackProgress(downloadId) {
+/**
+ * SSE Tracking for Fallback
+ */
+function trackProgressFromServer(downloadId) {
     return new Promise((resolve, reject) => {
         const eventSource = new EventSource(`/api/download/progress/${downloadId}`);
 
@@ -171,16 +353,12 @@ async function trackProgress(downloadId) {
             const data = JSON.parse(event.data);
 
             if (data.status === 'downloading' || data.status === 'starting') {
-                updateProgress(data.progress || 0);
+                updateProgress(data.progress || 0, `Downloading: ${data.progress || 0}%`);
             } else if (data.status === 'completed') {
-                updateProgress(100);
+                updateProgress(100, 'Finishing up...');
                 eventSource.close();
 
-                // Step 3: Download the file
-                downloadBtnText.textContent = 'Getting file...';
-
                 try {
-                    // Trigger file download
                     const downloadUrl = `/api/download/file/${downloadId}`;
                     const a = document.createElement('a');
                     a.href = downloadUrl;
@@ -189,63 +367,61 @@ async function trackProgress(downloadId) {
                     a.click();
                     document.body.removeChild(a);
 
-                    // Show success
-                    downloadBtnText.textContent = 'Downloaded!';
-                    showElement(successMessage);
-
-                    // Reset after 3 seconds
-                    setTimeout(() => {
-                        downloadBtn.disabled = false;
-                        downloadBtnText.textContent = 'Download Video';
-                        isDownloading = false;
-                        hideElement(progressContainer);
-                    }, 3000);
-
+                    completeDownloadSequence();
                     resolve();
                 } catch (error) {
                     reject(error);
                 }
             } else if (data.status === 'error') {
                 eventSource.close();
-                reject(new Error(data.error || 'Download failed'));
+                reject(new Error(data.error || 'Download failed on server.'));
             }
         };
 
-        eventSource.onerror = (error) => {
+        eventSource.onerror = () => {
             eventSource.close();
-            reject(new Error('Connection to server lost'));
+            reject(new Error('Connection to server timeout or lost.'));
         };
     });
 }
 
-// Auto-fetch on paste
-urlInput.addEventListener('paste', (e) => {
-    // Small delay to ensure paste completes
+/**
+ * Handle successful completion of flow
+ */
+function completeDownloadSequence() {
+    updateProgress(100, 'Done!');
+    getVideoBtnText.textContent = 'Get Another';
+    getVideoBtn.disabled = false;
+    isDownloading = false;
+    
+    show(successMessage);
+    
+    // hide progress indicator visually after 3 seconds so the card is fully clean
     setTimeout(() => {
-        const url = urlInput.value.trim();
-        if (url) {
-            fetchMetadata(url);
-        }
-    }, 100);
-});
+        hide(successMessage);
+    }, 4000);
+}
 
-// Also fetch on Enter key
+
+/**
+ * Event Listeners
+ */
+getVideoBtn.addEventListener('click', handleGetVideoFlow);
+
 urlInput.addEventListener('keypress', (e) => {
     if (e.key === 'Enter') {
-        const url = urlInput.value.trim();
-        if (url) {
-            fetchMetadata(url);
-        }
+        e.preventDefault();
+        handleGetVideoFlow();
     }
 });
 
-// Download button click
-downloadBtn.addEventListener('click', downloadVideo);
-
-// Clear input button (optional)
+// Clear state when user starts typing a new URL
 urlInput.addEventListener('input', () => {
-    if (urlInput.value.trim() === '') {
+    if (isDownloading) return;
+    hide(successMessage);
+    hide(errorMessage);
+    if (!urlInput.value.trim()) {
         resetUI();
-        currentVideoUrl = '';
+        show(featuresSection);
     }
 });

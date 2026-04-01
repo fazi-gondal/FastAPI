@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse, Res
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Dict, Optional
 import os
 import json
 import asyncio
@@ -10,6 +11,7 @@ import httpx
 import time
 import uuid
 from downloader import get_video_metadata, download_video, get_downloads_folder, get_direct_url
+
 
 
 # Store download progress globally
@@ -80,6 +82,12 @@ class URLRequest(BaseModel):
     url: str
 
 
+class ProxyStreamRequest(BaseModel):
+    direct_url: str
+    filename: str = "video.mp4"
+    headers: Optional[Dict[str, str]] = None
+
+
 @app.get("/", response_class=HTMLResponse)
 async def read_root():
     with open("static/index.html", "r", encoding="utf-8") as f:
@@ -101,14 +109,136 @@ async def fetch_metadata(request: URLRequest):
 @app.post("/api/get-direct-url")
 async def get_video_direct_url(request: URLRequest):
     """
-    Get direct download URL without using server bandwidth
-    Perfect for mobile apps - downloads directly from source
+    Get direct download URL without using server bandwidth.
+    Works for both mobile (React Native) and web frontend.
+    Returns:
+      - direct_url    : CDN URL to download from
+      - http_headers  : headers the client must attach (especially for TikTok)
+      - needs_proxy   : True if browser should use /api/proxy-stream instead of direct fetch
     """
     try:
         url_info = get_direct_url(request.url)
         return {"success": True, "data": url_info}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/proxy-stream")
+async def proxy_stream_video(request: ProxyStreamRequest):
+    """
+    Lightweight streaming proxy — streams the CDN video directly to the client
+    in 64 KB chunks WITHOUT saving anything to disk.
+
+    Use this when the CDN requires headers (Referer, User-Agent) that browsers
+    cannot set freely (e.g. TikTok). The server acts as a thin pass-through.
+    """
+    cdn_headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+    }
+    if request.headers:
+        cdn_headers.update(request.headers)
+
+    from urllib.parse import quote
+    import re
+    ascii_filename = re.sub(r'[^\x00-\x7F]+', '_', request.filename)
+    encoded_filename = quote(request.filename)
+    content_disposition = (
+        f'attachment; filename="{ascii_filename}"; '
+        f"filename*=UTF-8''{encoded_filename}"
+    )
+
+    async def stream_chunks():
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+            async with client.stream("GET", request.direct_url, headers=cdn_headers) as response:
+                if response.status_code not in (200, 206):
+                    raise HTTPException(
+                        status_code=502,
+                        detail=f"CDN returned {response.status_code}"
+                    )
+                async for chunk in response.aiter_bytes(chunk_size=65536):
+                    yield chunk
+
+    return StreamingResponse(
+        stream_chunks(),
+        media_type="video/mp4",
+        headers={
+            "Content-Disposition": content_disposition,
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/api/server-stream")
+async def server_stream_video(request: URLRequest):
+    """
+    Server-side download + stream: yt-dlp downloads the video (auto-merging
+    DASH video+audio streams), then we stream the merged file to the client
+    in 64 KB chunks and delete the temp file immediately after.
+
+    Used for Instagram and any platform whose CDN uses DASH (separate streams).
+    This guarantees the downloaded file has full audio+video.
+    """
+    from urllib.parse import quote
+    import re
+
+    try:
+        # Run yt-dlp download in a thread (blocking call)
+        loop = asyncio.get_event_loop()
+        filename, filepath = await loop.run_in_executor(
+            None,
+            lambda: download_video(request.url)
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=500, detail="Downloaded file not found on server")
+
+    # Build Content-Disposition header
+    ascii_filename = re.sub(r'[^\x00-\x7F]+', '_', filename)
+    encoded_filename = quote(filename)
+    content_disposition = (
+        f'attachment; filename="{ascii_filename}"; '
+        f"filename*=UTF-8''{encoded_filename}"
+    )
+
+    # Get file size for Content-Length header
+    file_size = os.path.getsize(filepath)
+
+    async def stream_and_cleanup():
+        try:
+            with open(filepath, 'rb') as f:
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk:
+                        break
+                    yield chunk
+        finally:
+            # Always clean up the temp file after streaming
+            try:
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+                    print(f"Cleaned up server-stream temp file: {filename}")
+            except Exception as e:
+                print(f"Cleanup error: {e}")
+
+    return StreamingResponse(
+        stream_and_cleanup(),
+        media_type="video/mp4",
+        headers={
+            "Content-Disposition": content_disposition,
+            "Content-Length": str(file_size),
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 
 
 @app.post("/api/download/start")
