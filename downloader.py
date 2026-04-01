@@ -165,10 +165,12 @@ def get_direct_url(url: str):
                 'filename':    filename,
                 'filesize':    filesize,
                 'http_headers': cdn_headers,
-                # Route cross-origin links through our Fast proxy so the web browser 
-                # auto-saves instead of opening a new tab. Mobile app ignores this flag.
-                'needs_proxy':  is_tiktok or is_instagram,
-                'use_server_download': False, # We disabled the slow fallback!
+                # Instagram works completely directly native without proxy.
+                'needs_proxy':  False, 
+                # TikTok blocks direct fetch without custom headers. This flag prompts 
+                # main.py to seamlessly mask direct_url with our server stream.
+                'force_backend_stream': is_tiktok, 
+                'use_server_download': False,
                 'expires_in':  21600,
             }
 

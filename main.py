@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.responses import StreamingResponse, FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -107,20 +107,84 @@ async def fetch_metadata(request: URLRequest):
 
 
 @app.post("/api/get-direct-url")
-async def get_video_direct_url(request: URLRequest):
+async def get_video_direct_url(body: URLRequest, request: Request):
     """
-    Get direct download URL without using server bandwidth.
+    Get direct download URL (or server proxy stream if CDN is strictly protected).
     Works for both mobile (React Native) and web frontend.
     Returns:
-      - direct_url    : CDN URL to download from
-      - http_headers  : headers the client must attach (especially for TikTok)
+      - direct_url    : CDN URL to download from (or our protected GET stream proxy)
+      - http_headers  : headers the client must attach
       - needs_proxy   : True if browser should use /api/proxy-stream instead of direct fetch
     """
+    import urllib.parse
     try:
-        url_info = get_direct_url(request.url)
+        url_info = get_direct_url(body.url)
+        # If the platform aggressively blocks mobile direct fetching (like TikTok no-watermark), 
+        # instantly route them to our seamless backend GET stream proxy instead of outputting a 403 CDN
+        if url_info.get("force_backend_stream"):
+            base_url = str(request.base_url)
+            safe_url = urllib.parse.quote(body.url)
+            url_info["direct_url"] = f"{base_url}api/stream?url={safe_url}"
         return {"success": True, "data": url_info}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/stream")
+async def stream_video_get(url: str):
+    """
+    Server-side GET proxy stream for aggressive CDNs that block mobile fetching.
+    Runs yt-dlp to safely merge/download the media into the Render server, then 
+    streams those stable bytes natively to the React Native app avoiding 403 crashes.
+    """
+    from urllib.parse import quote
+    import re
+    import asyncio
+    import os
+
+    try:
+        loop = asyncio.get_event_loop()
+        filename, filepath = await loop.run_in_executor(
+            None,
+            lambda: download_video(url)
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=500, detail="Downloaded file not found on server")
+
+    ascii_filename = re.sub(r'[^\x00-\x7F]+', '_', filename)
+    encoded_filename = quote(filename)
+    content_disposition = f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}'
+    file_size = os.path.getsize(filepath)
+
+    async def stream_and_cleanup():
+        try:
+            with open(filepath, 'rb') as f:
+                while True:
+                    chunk = f.read(65536)
+                    if not chunk:
+                        break
+                    yield chunk
+        finally:
+            if os.path.exists(filepath):
+                try:
+                    os.remove(filepath)
+                    print(f"Cleaned up GET stream temp file: {filename}")
+                except Exception as e:
+                    print(f"Cleanup error: {e}")
+
+    return StreamingResponse(
+        stream_and_cleanup(),
+        media_type="video/mp4",
+        headers={
+            "Content-Disposition": content_disposition,
+            "Content-Length": str(file_size),
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post("/api/proxy-stream")
