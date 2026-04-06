@@ -121,9 +121,10 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for Koyeb deployment guide.
 
 ### TikTok
 
-- Downloads without watermark
-- Best available quality
-- Multiple URL format support
+- **No-Watermark API**: Powered by TikWM for reliable, clean downloads
+- **HD Quality Support**: Downloads the best available High Definition video
+- **Hybrid Extraction**: Automatic fallback to yt-dlp if API is unavailable
+- **Multiple URL Formats**: Supports vm.tiktok.com, vt.tiktok.com, and more
 
 ### Instagram
 
@@ -213,6 +214,8 @@ Restart server to enable new progress tracking system.
 
 ### v2.1.0 (2026-04-06)
 
+- ✅ **TikWM Integration**: Switched TikTok engine to TikWM API for superior HD quality
+- ✅ **No-Watermark HD**: Guaranteed clean TikTok downloads with fallback resilience
 - ✅ **Mobile Stability**: Resolved video crashes on React Native and mobile browsers
 - ✅ **Native Progress Bars**: Added `Content-Length` headers to all streaming proxies
 - ✅ **Production Fix**: Resolved "metadata version" download issues on Vercel/Render

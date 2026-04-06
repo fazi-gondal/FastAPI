@@ -3,8 +3,7 @@ import os
 from pathlib import Path
 import re
 import time
-
-
+import httpx
 import tempfile
 
 def get_downloads_folder():
@@ -33,6 +32,27 @@ def get_video_metadata(url: str):
     """
     Extract video metadata using yt-dlp with improved error handling
     """
+    # ── TikTok TikWM API Logic (Highest Priority) ──────────────────────────
+    if 'tiktok.com' in url or 'vm.tiktok.com' in url or 'vt.tiktok.com' in url:
+        try:
+            with httpx.Client(timeout=10.0, follow_redirects=True) as client:
+                api_url = f"https://www.tikwm.com/api/?url={url}"
+                response = client.get(api_url).json()
+                
+                if response.get("code") == 0 and "data" in response:
+                    data = response["data"]
+                    return {
+                        'title': data.get('title', 'TikTok Video'),
+                        'thumbnail': data.get('cover', ''),
+                        'duration': data.get('duration', 0),
+                        'uploader': data.get('author', {}).get('nickname', 'Unknown'),
+                        'url': url,
+                        'platform': 'tiktok',
+                    }
+        except Exception as e:
+            print(f"TikWM API failed, falling back to yt-dlp: {e}")
+
+    # Fallback to standard yt-dlp logic
     ydl_opts = {
         'quiet': True,
         'no_warnings': True,
@@ -88,6 +108,40 @@ def get_direct_url(url: str):
     is_instagram = 'instagram.com' in url
     is_youtube   = 'youtube.com' in url or 'youtu.be' in url
 
+    # ── TikTok TikWM API Logic (Highest Priority) ──────────────────────────
+    if is_tiktok:
+        try:
+            with httpx.Client(timeout=15.0, follow_redirects=True) as client:
+                # Use HD=1 for best quality as per savetok repo
+                api_url = f"https://www.tikwm.com/api/?url={url}&hd=1"
+                api_res = client.get(api_url).json()
+
+                if api_res.get("code") == 0 and "data" in api_res:
+                    data = api_res["data"]
+                    # Priority for HD play link, fallback to clean watermarked-free link
+                    direct_url = data.get("hdplay") or data.get("play")
+                    
+                    if direct_url:
+                        if not direct_url.startswith("http"):
+                            direct_url = f"https://www.tikwm.com{direct_url}"
+                        
+                        return {
+                            'direct_url':  direct_url,
+                            'filename':    sanitize_filename(data.get("title", "tiktok_video")) + '.mp4',
+                            'filesize':    data.get("size", 0),
+                            'http_headers': {
+                                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                                'Referer': 'https://www.tikwm.com/',
+                            },
+                            'needs_proxy':  False, 
+                            'force_backend_stream': True, 
+                            'use_server_download': False,
+                            'expires_in':  21600,
+                        }
+        except Exception as e:
+            print(f"TikWM API extraction failed, falling back to yt-dlp: {e}")
+
+    # Fallback to standard yt-dlp logic
     # Build base yt-dlp options exactly as the original repo did
     ydl_opts = {
         'quiet': True,
@@ -217,14 +271,45 @@ def download_video(url: str, progress_callback=None, max_retries=3):
     
     # Platform-specific configurations
     if 'tiktok.com' in url or 'vm.tiktok.com' in url or 'vt.tiktok.com' in url:
-        # TikTok: Download without watermark (try multiple formats)
+        # Use TikWM API for TikTok (matches savetok repository logic)
+        try:
+            with httpx.Client(timeout=15.0, follow_redirects=True) as client:
+                api_url = f"https://www.tikwm.com/api/?url={url}&hd=1"
+                api_res = client.get(api_url).json()
+
+                if api_res.get("code") == 0 and "data" in api_res:
+                    data = api_res["data"]
+                    direct_url = data.get("hdplay") or data.get("play")
+                    if direct_url:
+                        if not direct_url.startswith("http"):
+                            direct_url = f"https://www.tikwm.com{direct_url}"
+                        
+                        title = data.get("title", "tiktok_video")
+                        filename = sanitize_filename(title) + ".mp4"
+                        filepath = os.path.join(downloads_folder, filename)
+                        
+                        # Download the file directly
+                        with client.stream("GET", direct_url, headers={
+                            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                            'Referer': 'https://www.tikwm.com/',
+                        }) as response:
+                            response.raise_for_status()
+                            with open(filepath, "wb") as f:
+                                for chunk in response.iter_bytes(chunk_size=16384):
+                                    f.write(chunk)
+                                    # Handle progress hook if needed (optional)
+                        
+                        return filename, filepath
+        except Exception as e:
+            print(f"TikWM download failed, falling back to yt-dlp: {e}")
+        
+        # TikTok: Fallback to yt-dlp
         ydl_opts.update({
             'format': 'download_addr_2/download_addr/play_addr/best/bestvideo+bestaudio',
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Referer': 'https://www.tiktok.com/',
             },
-            # Try to get version without watermark
             'extractor_args': {
                 'tiktok': {
                     'api_hostname': ['api22-normal-c-useast2a.tiktokv.com'],
