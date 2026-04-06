@@ -162,48 +162,32 @@ async def stream_video_get(url: str):
     encoded_filename = quote(filename)
     content_disposition = f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}'
 
-    # Fetch headers AND the stream body from the CDN in a single request to ensure 
-    # perfect Content-Length synchronization (avoiding mobile "stuck at 99%" bugs).
-    client = httpx.AsyncClient(timeout=120.0, follow_redirects=True)
-    try:
-        # Start the request to grab headers first
-        cdn_response = await client.stream("GET", direct_url, headers=cdn_headers)
-        
-        # Extract metadata directly from the active CDN response
-        actual_size = cdn_response.headers.get("Content-Length")
-        actual_type = cdn_response.headers.get("Content-Type", "video/mp4")
-        
-        if cdn_response.status_code not in (200, 206):
-            await cdn_response.aclose()
-            await client.aclose()
-            raise HTTPException(status_code=cdn_response.status_code, detail="CDN error")
-
-        async def stream_and_close():
-            try:
-                async for chunk in cdn_response.aiter_bytes(chunk_size=65536):
+    # Simplified Super-Lean Proxy: No more redundant HEAD requests. 
+    # We trust the filesize from the initial metadata (TikWM or yt-dlp) 
+    # and manage the httpx context strictly inside the generator.
+    async def stream_generator():
+        async with httpx.AsyncClient(timeout=120.0, follow_redirects=True) as client:
+            async with client.stream("GET", direct_url, headers=cdn_headers) as response:
+                if response.status_code not in (200, 206):
+                    raise HTTPException(status_code=response.status_code, detail="CDN error")
+                async for chunk in response.aiter_bytes(chunk_size=65536):
                     yield chunk
-            finally:
-                # Ensure connection is cleaned up exactly when the stream ends/interrupts
-                await cdn_response.aclose()
-                await client.aclose()
 
-        response_headers = {
-            "Content-Disposition": content_disposition,
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        }
-        if actual_size:
-            response_headers["Content-Length"] = actual_size
+    # Build reliable headers using the known filesize from metadata
+    actual_size = url_info.get("filesize")
+    response_headers = {
+        "Content-Disposition": content_disposition,
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+    }
+    if actual_size and actual_size > 0:
+        response_headers["Content-Length"] = str(actual_size)
 
-        return StreamingResponse(
-            stream_and_close(),
-            media_type=actual_type,
-            headers=response_headers,
-        )
-    except Exception as e:
-        await client.aclose()
-        if isinstance(e, HTTPException): raise
-        raise HTTPException(status_code=500, detail=f"Streaming failed: {str(e)}")
+    return StreamingResponse(
+        stream_generator(),
+        media_type="video/mp4",
+        headers=response_headers,
+    )
 
 
 @app.post("/api/proxy-stream")
