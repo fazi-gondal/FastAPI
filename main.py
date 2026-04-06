@@ -162,41 +162,48 @@ async def stream_video_get(url: str):
     encoded_filename = quote(filename)
     content_disposition = f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}'
 
-    # Proxy the chunks over httpx directly from the CDN
-    async def stream_chunks():
-        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
-            async with client.stream("GET", direct_url, headers=cdn_headers) as response:
-                if response.status_code not in (200, 206):
-                    # Raise an exception so StreamingResponse can handle the error appropriately
-                    # and not just yield an empty stream which crashes mobile native savers
-                    raise Exception(f"CDN returned {response.status_code}")
-                async for chunk in response.aiter_bytes(chunk_size=65536):
+    # Fetch headers AND the stream body from the CDN in a single request to ensure 
+    # perfect Content-Length synchronization (avoiding mobile "stuck at 99%" bugs).
+    client = httpx.AsyncClient(timeout=120.0, follow_redirects=True)
+    try:
+        # Start the request to grab headers first
+        cdn_response = await client.stream("GET", direct_url, headers=cdn_headers)
+        
+        # Extract metadata directly from the active CDN response
+        actual_size = cdn_response.headers.get("Content-Length")
+        actual_type = cdn_response.headers.get("Content-Type", "video/mp4")
+        
+        if cdn_response.status_code not in (200, 206):
+            await cdn_response.aclose()
+            await client.aclose()
+            raise HTTPException(status_code=cdn_response.status_code, detail="CDN error")
+
+        async def stream_and_close():
+            try:
+                async for chunk in cdn_response.aiter_bytes(chunk_size=65536):
                     yield chunk
+            finally:
+                # Ensure connection is cleaned up exactly when the stream ends/interrupts
+                await cdn_response.aclose()
+                await client.aclose()
 
-    # Try to detect actual Content-Length for mobile progress bars/stability
-    file_size = url_info.get("filesize") or 0
-    if file_size == 0:
-        try:
-            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
-                head_resp = await client.head(direct_url, headers=cdn_headers)
-                if head_resp.status_code == 200:
-                    file_size = int(head_resp.headers.get("Content-Length", 0))
-        except:
-            pass
+        response_headers = {
+            "Content-Disposition": content_disposition,
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        }
+        if actual_size:
+            response_headers["Content-Length"] = actual_size
 
-    response_headers = {
-        "Content-Disposition": content_disposition,
-        "Cache-Control": "no-cache",
-        "X-Accel-Buffering": "no",
-    }
-    if file_size > 0:
-        response_headers["Content-Length"] = str(file_size)
-
-    return StreamingResponse(
-        stream_chunks(),
-        media_type="video/mp4",
-        headers=response_headers,
-    )
+        return StreamingResponse(
+            stream_and_close(),
+            media_type=actual_type,
+            headers=response_headers,
+        )
+    except Exception as e:
+        await client.aclose()
+        if isinstance(e, HTTPException): raise
+        raise HTTPException(status_code=500, detail=f"Streaming failed: {str(e)}")
 
 
 @app.post("/api/proxy-stream")
