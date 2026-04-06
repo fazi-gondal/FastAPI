@@ -15,6 +15,8 @@ A powerful FastAPI-based video downloader supporting Instagram, TikTok, YouTube,
 - 🎨 **Modern UI**: Beautiful glassmorphism design
 - ☁️ **Production Ready**: Optimized for Vercel/Render with zero-disk-storage streaming
 - 📥 **Force Download**: Automatically triggers "Save As" prompts in browsers
+- 📱 **Mobile Stable**: Fixed crashes and "metadata-only" bugs on React Native/iOS
+- 📈 **Native Progress**: Provides `Content-Length` headers for native app progress bars
 
 ## 🚀 Quick Start
 
@@ -211,10 +213,12 @@ Restart server to enable new progress tracking system.
 
 ### v2.1.0 (2026-04-06)
 
+- ✅ **Mobile Stability**: Resolved video crashes on React Native and mobile browsers
+- ✅ **Native Progress Bars**: Added `Content-Length` headers to all streaming proxies
 - ✅ **Production Fix**: Resolved "metadata version" download issues on Vercel/Render
-- ✅ **Zero-Disk Streaming**: Refactored TikTok/Instagram to stream directly from CDN without using server disk
-- ✅ **Forced Downloads**: Implemented `Content-Disposition: attachment` for all streams to force browser download prompts
-- ✅ **Universal /tmp support**: Switched to system temp directories for maximum cloud compatibility
+- ✅ **Zero-Disk Streaming**: Refactored TikTok/Instagram to stream directly from CDN
+- ✅ **Forced Downloads**: Implemented `Content-Disposition: attachment` for all platforms
+- ✅ **Universal /tmp support**: Switched to system temp directories for cloud compatibility
 - ✅ **Security**: Added `.agents` directory to `.gitignore`
 
 ### v2.0.0 (2026-01-02)

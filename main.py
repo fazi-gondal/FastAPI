@@ -167,18 +167,35 @@ async def stream_video_get(url: str):
         async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
             async with client.stream("GET", direct_url, headers=cdn_headers) as response:
                 if response.status_code not in (200, 206):
-                    pass
+                    # Raise an exception so StreamingResponse can handle the error appropriately
+                    # and not just yield an empty stream which crashes mobile native savers
+                    raise Exception(f"CDN returned {response.status_code}")
                 async for chunk in response.aiter_bytes(chunk_size=65536):
                     yield chunk
+
+    # Try to detect actual Content-Length for mobile progress bars/stability
+    file_size = url_info.get("filesize") or 0
+    if file_size == 0:
+        try:
+            async with httpx.AsyncClient(timeout=5.0, follow_redirects=True) as client:
+                head_resp = await client.head(direct_url, headers=cdn_headers)
+                if head_resp.status_code == 200:
+                    file_size = int(head_resp.headers.get("Content-Length", 0))
+        except:
+            pass
+
+    response_headers = {
+        "Content-Disposition": content_disposition,
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+    }
+    if file_size > 0:
+        response_headers["Content-Length"] = str(file_size)
 
     return StreamingResponse(
         stream_chunks(),
         media_type="video/mp4",
-        headers={
-            "Content-Disposition": content_disposition,
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+        headers=response_headers,
     )
 
 
