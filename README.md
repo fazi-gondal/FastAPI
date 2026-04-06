@@ -4,15 +4,17 @@ A powerful FastAPI-based video downloader supporting Instagram, TikTok, YouTube,
 
 ## ✨ Features
 
-* 🎥 **Multi-Platform Support**: Download from Instagram, TikTok, YouTube, Facebook, Twitter, and 1000+ sites
-* 🚫 **TikTok Without Watermark**: Get clean TikTok videos
-* 🎬 **Instagram HD Quality**: Download Instagram Reels/Posts in 720p+
-* 📊 **Real-Time Progress**: Live download progress with Server-Sent Events
-* 📱 **Mobile Ready**: Complete React Native/Expo integration
-* 🌐 **CORS Enabled**: Works with web and mobile apps
-* 🍪 **Cookie Support**: Bypass YouTube bot detection
-* 🗑️ **Auto Cleanup**: Automatic file cleanup after download
-* 🎨 **Modern UI**: Beautiful glassmorphism design
+- 🎥 **Multi-Platform Support**: Download from Instagram, TikTok, YouTube, Facebook, Twitter, and 1000+ sites
+- 🚫 **TikTok Without Watermark**: Get clean TikTok videos
+- 🎬 **Instagram HD Quality**: Download Instagram Reels/Posts in 720p+
+- 📊 **Real-Time Progress**: Live download progress with Server-Sent Events
+- 📱 **Mobile Ready**: Complete React Native/Expo integration
+- 🌐 **CORS Enabled**: Works with web and mobile apps
+- 🍪 **Cookie Support**: Bypass YouTube bot detection
+- 🗑️ **Auto Cleanup**: Automatic file cleanup after download
+- 🎨 **Modern UI**: Beautiful glassmorphism design
+- ☁️ **Production Ready**: Optimized for Vercel/Render with zero-disk-storage streaming
+- 📥 **Force Download**: Automatically triggers "Save As" prompts in browsers
 
 ## 🚀 Quick Start
 
@@ -34,12 +36,12 @@ Server will start at `http://localhost:8000`
 
 ### Requirements
 
-* Python 3.11+
-* FastAPI
-* yt-dlp (2025.12.8)
-* uvicorn
-* httpx
-* aiofiles
+- Python 3.11+
+- FastAPI
+- yt-dlp (2025.12.8)
+- uvicorn
+- httpx
+- aiofiles
 
 ## 📋 Usage
 
@@ -59,10 +61,10 @@ See [API.md](API.md) for complete API documentation with examples.
 
 ```javascript
 // Fetch metadata
-const response = await fetch('http://localhost:8000/api/metadata', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ url: 'https://www.instagram.com/reel/xxxxx/' })
+const response = await fetch("http://localhost:8000/api/metadata", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ url: "https://www.instagram.com/reel/xxxxx/" }),
 });
 
 const metadata = await response.json();
@@ -70,7 +72,7 @@ const metadata = await response.json();
 
 ### React Native Integration
 
-Complete mobile app integration guide: [REACT\_NATIVE\_INTEGRATION.md](REACT_NATIVE_INTEGRATION.md)
+Complete mobile app integration guide: [REACT_NATIVE_INTEGRATION.md](REACT_NATIVE_INTEGRATION.md)
 
 ```bash
 # Install dependencies
@@ -84,8 +86,8 @@ npx expo install expo-file-system expo-media-library axios
 1. Push code to GitHub
 2. Connect to [Render](https://render.com)
 3. Deploy with:
-   * **Build Command**: `pip install -r requirements.txt`
-   * **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
 
@@ -95,43 +97,43 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for Koyeb deployment guide.
 
 ## 📚 Documentation
 
-* [API.md](API.md) - Complete API documentation
-* [REACT\_NATIVE\_INTEGRATION.md](REACT_NATIVE_INTEGRATION.md) - Mobile app integration
-* [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment guides (Render/Koyeb)
-* [YOUTUBE\_COOKIES.md](YOUTUBE_COOKIES.md) - Fix YouTube bot detection
-* [IMPROVEMENTS.md](IMPROVEMENTS.md) - Reliability improvements
-* [RENDER\_STORAGE.md](RENDER_STORAGE.md) - Storage management on Render
+- [API.md](API.md) - Complete API documentation
+- [REACT_NATIVE_INTEGRATION.md](REACT_NATIVE_INTEGRATION.md) - Mobile app integration
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment guides (Render/Koyeb)
+- [YOUTUBE_COOKIES.md](YOUTUBE_COOKIES.md) - Fix YouTube bot detection
+- [IMPROVEMENTS.md](IMPROVEMENTS.md) - Reliability improvements
+- [RENDER_STORAGE.md](RENDER_STORAGE.md) - Storage management on Render
 
 ## 🎯 Supported Platforms
 
-* ✅ YouTube (with cookie support)
-* ✅ Instagram (Posts, Reels, IGTV in HD)
-* ✅ TikTok (watermark-free)
-* ✅ Facebook
-* ✅ Twitter/X
-* ✅ Vimeo
-* ✅ Reddit
-* ✅ And 1000+ more via yt-dlp
+- ✅ YouTube (with cookie support)
+- ✅ Instagram (Posts, Reels, IGTV in HD)
+- ✅ TikTok (watermark-free)
+- ✅ Facebook
+- ✅ Twitter/X
+- ✅ Vimeo
+- ✅ Reddit
+- ✅ And 1000+ more via yt-dlp
 
 ## 🛠️ Platform-Specific Features
 
 ### TikTok
 
-* Downloads without watermark
-* Best available quality
-* Multiple URL format support
+- Downloads without watermark
+- Best available quality
+- Multiple URL format support
 
 ### Instagram
 
-* HD quality (720p+)
-* Supports Reels, Posts, IGTV
-* Thumbnail CORS proxy included
+- HD quality (720p+)
+- Supports Reels, Posts, IGTV
+- Thumbnail CORS proxy included
 
 ### YouTube
 
-* Best video + audio quality merged
-* Cookie support for bot detection
-* MP4 output format
+- Best video + audio quality merged
+- Cookie support for bot detection
+- MP4 output format
 
 ## 🔧 Configuration
 
@@ -144,17 +146,18 @@ For YouTube downloads, you may need to add cookies:
 3. Save as `cookies.txt` in project folder
 4. Restart server
 
-See [YOUTUBE\_COOKIES.md](YOUTUBE_COOKIES.md) for detailed instructions.
+See [YOUTUBE_COOKIES.md](YOUTUBE_COOKIES.md) for detailed instructions.
 
 ## 📊 API Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/metadata` | POST | Get video metadata |
-| `/api/download/start` | POST | Start download (returns ID) |
-| `/api/download/progress/{id}` | GET | Track progress (SSE) |
-| `/api/download/file/{id}` | GET | Download completed file |
-| `/api/thumbnail` | GET | Proxy thumbnail (CORS bypass) |
+| Endpoint                      | Method | Description                                     |
+| ----------------------------- | ------ | ----------------------------------------------- |
+| `/api/metadata`               | POST   | Get video metadata                              |
+| `/api/download/start`         | POST   | Start download (returns ID)                     |
+| `/api/download/progress/{id}` | GET    | Track progress (SSE)                            |
+| `/api/download/file/{id}`     | GET    | Download completed file                         |
+| `/api/stream?url={url}`       | GET    | Direct zero-disk proxy stream (Forces Download) |
+| `/api/thumbnail`              | GET    | Proxy thumbnail (CORS bypass)                   |
 
 ## 🏗️ Project Structure
 
@@ -178,17 +181,17 @@ FastAPI/
 
 ## 🔒 Security
 
-* ✅ CORS enabled for all origins (customize in production)
-* ✅ Cookie files gitignored
-* ✅ Automatic file cleanup
-* ✅ No sensitive data stored
-* ✅ Ephemeral storage on cloud platforms
+- ✅ CORS enabled for all origins (customize in production)
+- ✅ Cookie files gitignored
+- ✅ Automatic file cleanup
+- ✅ No sensitive data stored
+- ✅ Ephemeral storage on cloud platforms
 
 ## 🐛 Troubleshooting
 
 ### YouTube Bot Detection
 
-See [YOUTUBE\_COOKIES.md](YOUTUBE_COOKIES.md) for cookie setup.
+See [YOUTUBE_COOKIES.md](YOUTUBE_COOKIES.md) for cookie setup.
 
 ### Instagram Thumbnails Not Loading
 
@@ -196,9 +199,9 @@ App includes automatic CORS proxy for Instagram thumbnails.
 
 ### Videos Not Downloading
 
-* Check internet connection
-* Verify URL is public and accessible
-* Check yt-dlp is latest version: `pip install --upgrade yt-dlp`
+- Check internet connection
+- Verify URL is public and accessible
+- Check yt-dlp is latest version: `pip install --upgrade yt-dlp`
 
 ### Progress Bar Not Moving
 
@@ -206,22 +209,30 @@ Restart server to enable new progress tracking system.
 
 ## 📝 Changelog
 
+### v2.1.0 (2026-04-06)
+
+- ✅ **Production Fix**: Resolved "metadata version" download issues on Vercel/Render
+- ✅ **Zero-Disk Streaming**: Refactored TikTok/Instagram to stream directly from CDN without using server disk
+- ✅ **Forced Downloads**: Implemented `Content-Disposition: attachment` for all streams to force browser download prompts
+- ✅ **Universal /tmp support**: Switched to system temp directories for maximum cloud compatibility
+- ✅ **Security**: Added `.agents` directory to `.gitignore`
+
 ### v2.0.0 (2026-01-02)
 
-* ✅ Real-time progress tracking with SSE
-* ✅ Three-step download process
-* ✅ YouTube cookie support
-* ✅ Automatic file cleanup
-* ✅ Modern lifespan event handlers
-* ✅ Improved error handling
+- ✅ Real-time progress tracking with SSE
+- ✅ Three-step download process
+- ✅ YouTube cookie support
+- ✅ Automatic file cleanup
+- ✅ Modern lifespan event handlers
+- ✅ Improved error handling
 
 ### v1.0.0 (2025-12-30)
 
-* ✅ Initial release
-* ✅ Multi-platform support
-* ✅ FastAPI backend
-* ✅ Modern glassmorphism UI
-* ✅ React Native integration
+- ✅ Initial release
+- ✅ Multi-platform support
+- ✅ FastAPI backend
+- ✅ Modern glassmorphism UI
+- ✅ React Native integration
 
 ## 🤝 Contributing
 
@@ -235,21 +246,21 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Fazi Gondal**
 
-* GitHub: [@fazi-gondal](https://github.com/fazi-gondal)
-* Email: nextinpk@gmail.com
+- GitHub: [@fazi-gondal](https://github.com/fazi-gondal)
+- Email: nextinpk@gmail.com
 
 ## 🙏 Acknowledgments
 
-* [yt-dlp](https://github.com/yt-dlp/yt-dlp) - The amazing video downloader
-* [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
-* [Expo](https://expo.dev/) - React Native development platform
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) - The amazing video downloader
+- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
+- [Expo](https://expo.dev/) - React Native development platform
 
 ## ⭐ Show Your Support
 
 Give a ⭐️ if this project helped you!
 
-***
+---
 
 ### **Made with ❤️ by Fazi Gondal**
 
-***
+---

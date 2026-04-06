@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "skills": {
+    "fastapi-python": {
+      "source": "mindrally/skills",
+      "sourceType": "github",
+      "computedHash": "4521c6090735152b7b8df670cefe5c1c6d1dcaa115de67bb96e74ebf802d4f24"
+    },
+    "youtube-downloader": {
+      "source": "composiohq/awesome-claude-skills",
+      "sourceType": "github",
+      "computedHash": "baf53606f73fc1c23ed61eda0d534d3c2ab59838562075a6af6bdc85ac6bd07d"
+    },
+    "yt-dlp": {
+      "source": "lwmxiaobei/yt-dlp-skill",
+      "sourceType": "github",
+      "computedHash": "e00cfa7889c5a27c49cbb42a4b42086fe58a324002d566095b1f56b32f36c3b9"
+    },
+    "yt-dlp-downloader": {
+      "source": "mapleshaw/yt-dlp-downloader-skill",
+      "sourceType": "github",
+      "computedHash": "f85cc30f8de2ee7d35ee8989f6d6fb16ca54b6474e97444fb17cd895cbde2471"
+    }
+  }
+}

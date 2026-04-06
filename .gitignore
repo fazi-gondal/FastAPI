@@ -28,3 +28,6 @@ cookies.txt
 *.webm
 *.mkv
 *.avi
+
+# Agent directory
+.agents/

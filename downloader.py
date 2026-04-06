@@ -5,13 +5,15 @@ import re
 import time
 
 
+import tempfile
+
 def get_downloads_folder():
-    """Get a temporary downloads folder in the project directory"""
-    # Use project directory's temp folder instead of system Downloads
-    temp_dir = os.path.join(os.path.dirname(__file__), 'temp_downloads')
+    """Get a temporary downloads folder in a writable directory"""
+    # Use system temp dir (which is writable on Vercel/Render, e.g., /tmp)
+    temp_dir = os.path.join(tempfile.gettempdir(), 'fastapi_downloads')
     # Create directory if it doesn't exist
     if not os.path.exists(temp_dir):
-        os.makedirs(temp_dir)
+        os.makedirs(temp_dir, exist_ok=True)
     return temp_dir
 
 
@@ -165,11 +167,11 @@ def get_direct_url(url: str):
                 'filename':    filename,
                 'filesize':    filesize,
                 'http_headers': cdn_headers,
-                # Instagram works completely directly native without proxy.
                 'needs_proxy':  False, 
-                # TikTok blocks direct fetch without custom headers. This flag prompts 
-                # main.py to seamlessly mask direct_url with our server stream.
-                'force_backend_stream': is_tiktok, 
+                # Force all platforms to proxy stream through the backend.
+                # This ensures the backend attaches the Content-Disposition: attachment
+                # header, forcing browsers to popup a download prompt instead of playing inline.
+                'force_backend_stream': True, 
                 'use_server_download': False,
                 'expires_in':  21600,
             }
@@ -217,7 +219,7 @@ def download_video(url: str, progress_callback=None, max_retries=3):
     if 'tiktok.com' in url or 'vm.tiktok.com' in url or 'vt.tiktok.com' in url:
         # TikTok: Download without watermark (try multiple formats)
         ydl_opts.update({
-            'format': 'best/bestvideo+bestaudio/best',
+            'format': 'download_addr_2/download_addr/play_addr/best/bestvideo+bestaudio',
             'http_headers': {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 'Referer': 'https://www.tiktok.com/',
@@ -225,7 +227,8 @@ def download_video(url: str, progress_callback=None, max_retries=3):
             # Try to get version without watermark
             'extractor_args': {
                 'tiktok': {
-                    'api_hostname': 'api22-normal-c-useast2a.tiktokv.com',
+                    'api_hostname': ['api22-normal-c-useast2a.tiktokv.com'],
+                    'app_version': ['300904'],
                 }
             }
         })

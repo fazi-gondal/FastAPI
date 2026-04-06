@@ -134,53 +134,48 @@ async def get_video_direct_url(body: URLRequest, request: Request):
 async def stream_video_get(url: str):
     """
     Server-side GET proxy stream for aggressive CDNs that block mobile fetching.
-    Runs yt-dlp to safely merge/download the media into the Render server, then 
-    streams those stable bytes natively to the React Native app avoiding 403 crashes.
+    Proxies the CDN video directly to the React Native app chunk-by-chunk without 
+    saving to the server disk natively avoiding 403 crashes and memory/disk limits.
     """
     from urllib.parse import quote
     import re
     import asyncio
-    import os
-
+    
     try:
         loop = asyncio.get_event_loop()
-        filename, filepath = await loop.run_in_executor(
+        # Fetch the direct URL metadata without downloading the video
+        url_info = await loop.run_in_executor(
             None,
-            lambda: download_video(url)
+            lambda: get_direct_url(url)
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    if not os.path.exists(filepath):
-        raise HTTPException(status_code=500, detail="Downloaded file not found on server")
+    direct_url = url_info.get("direct_url")
+    if not direct_url:
+        raise HTTPException(status_code=500, detail="Could not resolve direct URL")
+        
+    filename = url_info.get("filename", "video.mp4")
+    cdn_headers = url_info.get("http_headers", {})
 
     ascii_filename = re.sub(r'[^\x00-\x7F]+', '_', filename)
     encoded_filename = quote(filename)
     content_disposition = f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}'
-    file_size = os.path.getsize(filepath)
 
-    async def stream_and_cleanup():
-        try:
-            with open(filepath, 'rb') as f:
-                while True:
-                    chunk = f.read(65536)
-                    if not chunk:
-                        break
+    # Proxy the chunks over httpx directly from the CDN
+    async def stream_chunks():
+        async with httpx.AsyncClient(timeout=60.0, follow_redirects=True) as client:
+            async with client.stream("GET", direct_url, headers=cdn_headers) as response:
+                if response.status_code not in (200, 206):
+                    pass
+                async for chunk in response.aiter_bytes(chunk_size=65536):
                     yield chunk
-        finally:
-            if os.path.exists(filepath):
-                try:
-                    os.remove(filepath)
-                    print(f"Cleaned up GET stream temp file: {filename}")
-                except Exception as e:
-                    print(f"Cleanup error: {e}")
 
     return StreamingResponse(
-        stream_and_cleanup(),
+        stream_chunks(),
         media_type="video/mp4",
         headers={
             "Content-Disposition": content_disposition,
-            "Content-Length": str(file_size),
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         },
