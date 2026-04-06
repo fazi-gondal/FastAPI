@@ -186,15 +186,19 @@ async function executeDownloadSequence() {
             throw new Error(json.detail || 'Failed to resolve download URL');
         }
 
-        const { direct_url, filename, http_headers, needs_proxy, use_server_download } = json.data;
-        updateProgress(40, 'Starting download...');
+        const { direct_url, filename, http_headers, needs_proxy, use_server_download, force_backend_stream } = json.data;
+        updateProgress(30, 'Starting download...');
 
         if (use_server_download) {
             // Instagram & DASH platforms: yt-dlp downloads + merges on server,
             // then streams the merged file back to the browser. Guaranteed audio+video.
             await downloadViaServerStream(filename);
+        } else if (force_backend_stream) {
+            // TikTok (no-watermark HD): backend proxies the CDN bytes — real progress shown.
+            // direct_url already points to our /api/stream?url=...&direct_url=... proxy.
+            await downloadViaBackendStream(direct_url, filename);
         } else if (needs_proxy) {
-            // TikTok: single combined CDN file, just proxy the bytes through.
+            // Single combined CDN file needing headers — proxy bytes through server.
             await downloadViaProxy(direct_url, filename, http_headers);
         } else {
             // Other platforms (Twitter/X, Vimeo, etc): direct CDN link works.
@@ -205,6 +209,56 @@ async function executeDownloadSequence() {
         console.warn('Direct URL/Proxy failed, falling back to server download:', error.message);
         await downloadViaServerFallback();
     }
+}
+
+/**
+ * Backend stream proxy — fetches our /api/stream URL with XHR so we can
+ * report real download progress, then saves the blob to the device.
+ * Used for TikTok (force_backend_stream=true) where CDN blocks browsers.
+ */
+function downloadViaBackendStream(streamUrl, filename) {
+    return new Promise((resolve, reject) => {
+        updateProgress(35, 'Connecting to server stream...');
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', streamUrl, true);
+        xhr.responseType = 'blob';
+
+        xhr.onprogress = (event) => {
+            if (event.lengthComputable) {
+                const pct = (event.loaded / event.total) * 60 + 35; // 35% → 95%
+                updateProgress(pct, `Downloading ${Math.round((event.loaded / event.total) * 100)}%...`);
+            } else {
+                // No Content-Length — show indeterminate pulse
+                const mb = (event.loaded / 1048576).toFixed(1);
+                updateProgress(70, `Received ${mb} MB...`);
+            }
+        };
+
+        xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                updateProgress(95, 'Saving file to device...');
+                const blob = xhr.response;
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = filename || 'video.mp4';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(blobUrl);
+                }, 5000);
+                completeDownloadSequence();
+                resolve();
+            } else {
+                reject(new Error(`Server stream returned ${xhr.status}`));
+            }
+        };
+
+        xhr.onerror = () => reject(new Error('Network error during server stream download.'));
+        xhr.send();
+    });
 }
 
 /**

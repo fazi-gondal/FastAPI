@@ -1,228 +1,233 @@
 # Social Media Downloader API
 
-A powerful FastAPI-based video downloader supporting Instagram, TikTok, YouTube, and 1000+ platforms with real-time progress tracking.
+A powerful FastAPI-based video downloader supporting Instagram, TikTok, YouTube, and 1000+ platforms — with zero-disk streaming, server-side proxy, and real-time progress tracking.
 
 ## ✨ Features
 
-- 🎥 **Multi-Platform Support**: Download from Instagram, TikTok, YouTube, Facebook, Twitter, and 1000+ sites
-- 🚫 **TikTok Without Watermark**: Get clean TikTok videos
+- 🎥 **Multi-Platform Support**: Download from Instagram, TikTok, YouTube, Facebook, Twitter/X, and 1000+ sites via yt-dlp
+- 🚫 **TikTok Without Watermark**: HD no-watermark downloads powered by the TikWM API
 - 🎬 **Instagram HD Quality**: Download Instagram Reels/Posts in 720p+
-- 📊 **Real-Time Progress**: Live download progress with Server-Sent Events
-- 📱 **Mobile Ready**: Complete React Native/Expo integration
-- 🌐 **CORS Enabled**: Works with web and mobile apps
+- 📊 **Real-Time Progress**: Live download progress via XHR (web) and `expo-file-system` (mobile)
+- 📱 **Mobile Ready**: Zero-change React Native/Expo integration — works out of the box
+- 🌐 **CORS Enabled**: Works with web browsers, mobile apps, and Expo Go
+- 🔄 **Server-Side Stream Proxy**: Bypasses TikTok CDN blocking on mobile & mobile web
 - 🍪 **Cookie Support**: Bypass YouTube bot detection
-- 🗑️ **Auto Cleanup**: Automatic file cleanup after download
-- 🎨 **Modern UI**: Beautiful glassmorphism design
-- ☁️ **Production Ready**: Optimized for Vercel/Render with zero-disk-storage streaming
-- 📥 **Force Download**: Automatically triggers "Save As" prompts in browsers
-- 📱 **Mobile Stable**: Fixed crashes and "metadata-only" bugs on React Native/iOS
-- 📈 **Native Progress**: Provides `Content-Length` headers for native app progress bars
+- 🗑️ **Auto Cleanup**: Automatic temp file cleanup after download
+- 🎨 **Modern UI**: Glassmorphism dark-mode web interface with live progress bar
+- ☁️ **Production Ready**: Deployed on Render with zero-disk-storage streaming
+- 📥 **Force Download**: `Content-Disposition: attachment` triggers Save-As on all platforms
+- 📈 **Native Progress**: `Content-Length` headers forwarded from CDN for native mobile progress bars
+- ⚡ **Optimized**: Single TikWM API call per request (no double fetches)
 
 ## 🚀 Quick Start
 
 ### Installation
 
 ```bash
-# Clone the repository
 git clone https://github.com/fazi-gondal/FastAPI.git
 cd FastAPI
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Run the server
 python main.py
 ```
 
-Server will start at `http://localhost:8000`
+Server starts at `http://localhost:8000`
 
 ### Requirements
 
 - Python 3.11+
-- FastAPI
-- yt-dlp (2025.12.8)
-- uvicorn
-- httpx
-- aiofiles
+- FastAPI, uvicorn, httpx, yt-dlp, aiofiles
 
 ## 📋 Usage
 
 ### Web Interface
 
-1. Open `http://localhost:8000` in your browser
-2. Paste a video URL (Instagram, TikTok, YouTube, etc.)
-3. Click "Get Video Info"
-4. Click "Download Video"
-5. Video downloads to your Downloads folder
+1. Open `http://localhost:8000`
+2. Paste a TikTok, Instagram, YouTube, or any supported video URL
+3. Hit **Get Video** — metadata loads automatically
+4. Download starts with real-time progress bar
 
 ### API Integration
 
-See [API.md](API.md) for complete API documentation with examples.
-
-**Quick Example**:
+See [API.md](API.md) for full API documentation.
 
 ```javascript
 // Fetch metadata
-const response = await fetch("http://localhost:8000/api/metadata", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ url: "https://www.instagram.com/reel/xxxxx/" }),
+const res = await fetch('/api/metadata', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ url: 'https://www.tiktok.com/@user/video/123' })
 });
-
-const metadata = await response.json();
+const { data } = await res.json();
+// { title, thumbnail, duration, uploader, platform }
 ```
 
-### React Native Integration
+### React Native / Expo Integration
 
-Complete mobile app integration guide: [REACT_NATIVE_INTEGRATION.md](REACT_NATIVE_INTEGRATION.md)
+See [REACT_NATIVE_INTEGRATION.md](REACT_NATIVE_INTEGRATION.md) for the complete guide.
 
 ```bash
-# Install dependencies
 npx expo install expo-file-system expo-media-library axios
 ```
 
 ## 🌐 Deployment
 
-### Deploy to Render
+### Render (Recommended)
 
-1. Push code to GitHub
-2. Connect to [Render](https://render.com)
-3. Deploy with:
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+1. Push to GitHub
+2. Connect repo on [Render](https://render.com)
+3. Set:
+   - **Build**: `pip install -r requirements.txt`
+   - **Start**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
+Production URL: `https://fastapi-u8bm.onrender.com`
 
-### Deploy to Koyeb
+See [DEPLOYMENT.md](DEPLOYMENT.md) for Koyeb and other platforms.
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for Koyeb deployment guide.
+## 📊 API Endpoints
 
-## 📚 Documentation
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/metadata` | POST | Get video title, thumbnail, duration, uploader |
+| `/api/get-direct-url` | POST | Resolve download URL (proxy or CDN) |
+| `/api/stream` | GET | **Server-side proxy stream** — for TikTok & CDN-blocked platforms |
+| `/api/tiktok/info` | GET | Full TikWM data: `hdplay`, `play`, `wmplay`, `cover`, `author`, `music_info` |
+| `/api/proxy-stream` | POST | Lightweight CDN proxy (POST variant) |
+| `/api/server-stream` | POST | yt-dlp server-download + stream (DASH/merged) |
+| `/api/download/start` | POST | Start background download, returns ID |
+| `/api/download/progress/{id}` | GET | SSE progress stream |
+| `/api/download/file/{id}` | GET | Serve completed download file |
+| `/api/thumbnail` | GET | CORS proxy for CDN thumbnails |
 
-- [API.md](API.md) - Complete API documentation
-- [REACT_NATIVE_INTEGRATION.md](REACT_NATIVE_INTEGRATION.md) - Mobile app integration
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment guides (Render/Koyeb)
-- [YOUTUBE_COOKIES.md](YOUTUBE_COOKIES.md) - Fix YouTube bot detection
-- [IMPROVEMENTS.md](IMPROVEMENTS.md) - Reliability improvements
-- [RENDER_STORAGE.md](RENDER_STORAGE.md) - Storage management on Render
+## 🔁 Download Flow Architecture
+
+### TikTok (no-watermark HD)
+
+```
+Web/Mobile  →  POST /api/get-direct-url
+Backend     →  TikWM API (hd=1) — single call
+Backend     ←  { direct_url: "/api/stream?url=...&direct_url=<cdn>" }
+Web/Mobile  →  GET /api/stream?url=...&direct_url=<cdn>  (fast path, no 2nd API call)
+Backend     →  Proxy TikWM CDN bytes → Client (with Content-Length)
+```
+
+### Instagram
+
+```
+Web/Mobile  →  POST /api/get-direct-url  →  yt-dlp extracts URL
+Backend     ←  { direct_url: "/api/stream?url=..." }
+Client      →  GET /api/stream  →  yt-dlp CDN → Client
+```
+
+### YouTube / Twitter / Others
+
+```
+Web/Mobile  →  POST /api/get-direct-url  →  yt-dlp extracts CDN URL
+Backend     ←  { direct_url: "https://cdn.example.com/...", force_backend_stream: true }
+Client      →  GET /api/stream  →  Proxied stream → Client
+```
 
 ## 🎯 Supported Platforms
 
 - ✅ YouTube (with cookie support)
 - ✅ Instagram (Posts, Reels, IGTV in HD)
-- ✅ TikTok (watermark-free)
+- ✅ TikTok (watermark-free, HD via TikWM API)
 - ✅ Facebook
 - ✅ Twitter/X
 - ✅ Vimeo
 - ✅ Reddit
-- ✅ And 1000+ more via yt-dlp
+- ✅ 1000+ more via yt-dlp
 
 ## 🛠️ Platform-Specific Features
 
 ### TikTok
 
-- **No-Watermark API**: Powered by TikWM for reliable, clean downloads
-- **HD Quality Support**: Downloads the best available High Definition video
-- **Hybrid Extraction**: Automatic fallback to yt-dlp if API is unavailable
-- **Multiple URL Formats**: Supports vm.tiktok.com, vt.tiktok.com, and more
+- **TikWM API**: `hd=1` for HD no-watermark, falls back to `play` (SD)
+- **Zero double-calls**: pre-resolved CDN URL embedded in the stream proxy URL
+- **Mobile safe**: server-side proxy bypasses TikTok CDN CORS blocks on all clients
+- **URL formats**: `tiktok.com`, `vm.tiktok.com`, `vt.tiktok.com`
 
 ### Instagram
 
-- HD quality (720p+)
-- Supports Reels, Posts, IGTV
-- Thumbnail CORS proxy included
+- HD quality (720p+), supports Reels, Posts, IGTV
+- CORS thumbnail proxy included
+- Server-side merge for DASH streams
 
 ### YouTube
 
-- Best video + audio quality merged
-- Cookie support for bot detection
-- MP4 output format
+- Best video + audio quality merged (MP4)
+- Cookie support for bot detection bypass
 
 ## 🔧 Configuration
 
 ### YouTube Cookie Setup (Optional)
 
-For YouTube downloads, you may need to add cookies:
-
-1. Install browser extension: [Get cookies.txt](https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
+1. Install [Get cookies.txt](https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc)
 2. Export cookies from YouTube.com
-3. Save as `cookies.txt` in project folder
-4. Restart server
+3. Save as `cookies.txt` in project root
+4. Restart the server
 
-See [YOUTUBE_COOKIES.md](YOUTUBE_COOKIES.md) for detailed instructions.
-
-## 📊 API Endpoints
-
-| Endpoint                      | Method | Description                                     |
-| ----------------------------- | ------ | ----------------------------------------------- |
-| `/api/metadata`               | POST   | Get video metadata                              |
-| `/api/download/start`         | POST   | Start download (returns ID)                     |
-| `/api/download/progress/{id}` | GET    | Track progress (SSE)                            |
-| `/api/download/file/{id}`     | GET    | Download completed file                         |
-| `/api/stream?url={url}`       | GET    | Direct zero-disk proxy stream (Forces Download) |
-| `/api/thumbnail`              | GET    | Proxy thumbnail (CORS bypass)                   |
+See [YOUTUBE_COOKIES.md](YOUTUBE_COOKIES.md) for details.
 
 ## 🏗️ Project Structure
 
 ```
 FastAPI/
-├── main.py                 # FastAPI application
-├── downloader.py          # yt-dlp download logic
-├── requirements.txt       # Python dependencies
-├── runtime.txt           # Python version
-├── Procfile              # Deployment config
-├── static/               # Frontend files
-│   ├── index.html
+├── main.py              # FastAPI app — all endpoints
+├── downloader.py        # yt-dlp + TikWM download logic
+├── requirements.txt
+├── runtime.txt
+├── Procfile
+├── static/
+│   ├── index.html       # Glassmorphism dark UI
 │   ├── style.css
-│   └── script.js
-├── temp_downloads/       # Temporary download storage
-└── docs/                 # Documentation
-    ├── API.md
-    ├── DEPLOYMENT.md
-    └── ...
+│   └── script.js        # XHR-based download with live progress
+└── temp_downloads/      # Auto-cleaned temp files
 ```
 
 ## 🔒 Security
 
-- ✅ CORS enabled for all origins (customize in production)
-- ✅ Cookie files gitignored
-- ✅ Automatic file cleanup
-- ✅ No sensitive data stored
-- ✅ Ephemeral storage on cloud platforms
+- CORS open for all origins (restrict in production as needed)
+- `cookies.txt` gitignored
+- Auto temp file cleanup (on startup + after serve)
+- No video data stored beyond TTL
 
 ## 🐛 Troubleshooting
 
+### TikTok returning 500
+
+- Check server logs — likely a CDN token expiry (re-fetch URL)
+- Ensure `httpx` is up to date: `pip install --upgrade httpx`
+
 ### YouTube Bot Detection
 
-See [YOUTUBE_COOKIES.md](YOUTUBE_COOKIES.md) for cookie setup.
+See [YOUTUBE_COOKIES.md](YOUTUBE_COOKIES.md).
 
-### Instagram Thumbnails Not Loading
+### Progress Bar Stuck at 0%
 
-App includes automatic CORS proxy for Instagram thumbnails.
+TikTok CDN may not return `Content-Length` (chunked encoding). Progress shows received MB instead of percentage. This is normal.
 
-### Videos Not Downloading
+### Video Has No Audio (Instagram)
 
-- Check internet connection
-- Verify URL is public and accessible
-- Check yt-dlp is latest version: `pip install --upgrade yt-dlp`
-
-### Progress Bar Not Moving
-
-Restart server to enable new progress tracking system.
+Use `/api/server-stream` — it runs yt-dlp to merge DASH streams with audio.
 
 ## 📝 Changelog
 
-### v2.1.0 (2026-04-06)
+### v2.2.0 (2026-04-06)
 
-- ✅ **TikWM Integration**: Switched TikTok engine to TikWM API for superior HD quality
-- ✅ **No-Watermark HD**: Guaranteed clean TikTok downloads with fallback resilience
-- ✅ **Mobile Stability**: Resolved video crashes on React Native and mobile browsers
-- ✅ **Native Progress Bars**: Added `Content-Length` headers to all streaming proxies
-- ✅ **Production Fix**: Resolved "metadata version" download issues on Vercel/Render
-- ✅ **Zero-Disk Streaming**: Refactored TikTok/Instagram to stream directly from CDN
-- ✅ **Forced Downloads**: Implemented `Content-Disposition: attachment` for all platforms
-- ✅ **Universal /tmp support**: Switched to system temp directories for cloud compatibility
-- ✅ **Security**: Added `.agents` directory to `.gitignore`
+- ✅ **Fixed 500 error on `/api/stream`**: replaced invalid `await client.stream()` with correct `await client.send(request, stream=True)` (httpx API fix)
+- ✅ **Eliminated double TikWM API call**: pre-resolved CDN URL embedded in stream URL via `direct_url` query param
+- ✅ **Web frontend TikTok fix**: added `force_backend_stream` routing with XHR-based `downloadViaBackendStream()` and real progress bar
+- ✅ **New `/api/tiktok/info` endpoint**: returns full TikWM data object (`hdplay`, `play`, `wmplay`, `cover`, `author`, `music_info`) for React Native apps
+- ✅ **New `get_tiktok_info()` function** in `downloader.py`
+- ✅ **No mobile app changes required** — backend changes are fully backward-compatible
+
+### v2.1.0 (2026-04-01)
+
+- ✅ TikWM API integration for HD no-watermark TikTok downloads
+- ✅ Mobile stability fixes — resolved React Native video crashes
+- ✅ `Content-Length` headers for native progress bars
+- ✅ Zero-disk streaming for TikTok and Instagram
+- ✅ `Content-Disposition: attachment` forced on all proxied streams
 
 ### v2.0.0 (2026-01-02)
 
@@ -231,23 +236,18 @@ Restart server to enable new progress tracking system.
 - ✅ YouTube cookie support
 - ✅ Automatic file cleanup
 - ✅ Modern lifespan event handlers
-- ✅ Improved error handling
 
 ### v1.0.0 (2025-12-30)
 
-- ✅ Initial release
-- ✅ Multi-platform support
-- ✅ FastAPI backend
-- ✅ Modern glassmorphism UI
-- ✅ React Native integration
+- ✅ Initial release — multi-platform support, FastAPI backend, glassmorphism UI
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+PRs welcome! Please open an issue first for major changes.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License — see [LICENSE](LICENSE).
 
 ## 👤 Author
 
@@ -258,16 +258,11 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) - The amazing video downloader
-- [FastAPI](https://fastapi.tiangolo.com/) - Modern Python web framework
-- [Expo](https://expo.dev/) - React Native development platform
-
-## ⭐ Show Your Support
-
-Give a ⭐️ if this project helped you!
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) — The amazing video downloader
+- [TikWM](https://www.tikwm.com) — TikTok no-watermark API
+- [FastAPI](https://fastapi.tiangolo.com/) — Modern Python web framework
+- [Expo](https://expo.dev/) — React Native development platform
 
 ---
 
 ### **Made with ❤️ by Fazi Gondal**
-
----

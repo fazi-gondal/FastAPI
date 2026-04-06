@@ -28,6 +28,36 @@ def sanitize_filename(filename):
     return filename
 
 
+def get_tiktok_info(url: str) -> dict:
+    """
+    Fetch the full raw TikWM data object for a TikTok URL.
+    Returns everything: hdplay, play, wmplay, cover, author, music_info,
+    duration, title, size, digg_count, comment_count, etc.
+    Used by the React Native mobile app via /api/tiktok/info.
+    """
+    is_tiktok = 'tiktok.com' in url or 'vm.tiktok.com' in url or 'vt.tiktok.com' in url
+    if not is_tiktok:
+        raise Exception("URL is not a TikTok link")
+
+    with httpx.Client(timeout=15.0, follow_redirects=True) as client:
+        api_url = f"https://www.tikwm.com/api/?url={url}&hd=1"
+        response = client.get(api_url)
+        response.raise_for_status()
+        result = response.json()
+
+    if result.get("code") != 0 or "data" not in result:
+        raise Exception(f"TikWM API error: {result.get('msg', 'Unknown error')}")
+
+    data = result["data"]
+
+    # Ensure play URLs are absolute
+    for key in ("play", "wmplay", "hdplay", "music"):
+        if data.get(key) and not data[key].startswith("http"):
+            data[key] = f"https://www.tikwm.com{data[key]}"
+
+    return data
+
+
 def get_video_metadata(url: str):
     """
     Extract video metadata using yt-dlp with improved error handling

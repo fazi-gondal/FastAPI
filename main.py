@@ -10,7 +10,7 @@ import asyncio
 import httpx
 import time
 import uuid
-from downloader import get_video_metadata, download_video, get_downloads_folder, get_direct_url
+from downloader import get_video_metadata, download_video, get_downloads_folder, get_direct_url, get_tiktok_info
 
 
 
@@ -119,73 +119,95 @@ async def get_video_direct_url(body: URLRequest, request: Request):
     import urllib.parse
     try:
         url_info = get_direct_url(body.url)
-        # If the platform aggressively blocks mobile direct fetching (like TikTok no-watermark), 
-        # instantly route them to our seamless backend GET stream proxy instead of outputting a 403 CDN
+        # If the platform aggressively blocks mobile direct fetching (like TikTok no-watermark),
+        # route to our backend GET stream proxy. Embed the pre-resolved CDN URL so /api/stream
+        # skips the second TikWM API call (fast path). Works for both React Native and web.
         if url_info.get("force_backend_stream"):
             base_url = str(request.base_url)
             safe_url = urllib.parse.quote(body.url)
-            url_info["direct_url"] = f"{base_url}api/stream?url={safe_url}"
+            # Embed the already-resolved CDN URL so /api/stream can fast-path directly
+            cdn_direct = urllib.parse.quote(url_info.get("direct_url", ""))
+            url_info["direct_url"] = f"{base_url}api/stream?url={safe_url}&direct_url={cdn_direct}"
         return {"success": True, "data": url_info}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.get("/api/stream")
-async def stream_video_get(url: str):
+@app.get("/api/tiktok/info")
+async def get_tiktok_video_info(url: str):
     """
-    Server-side GET proxy stream for aggressive CDNs that block mobile fetching.
-    Proxies the CDN video directly to the React Native app chunk-by-chunk without 
-    saving to the server disk natively avoiding 403 crashes and memory/disk limits.
+    Returns the full TikWM data object for a TikTok URL.
+    Used by the React Native mobile app to get hdplay, play, wmplay,
+    cover, author, music_info, duration, title, etc. in a single call.
     """
-    from urllib.parse import quote
-    import re
-    import asyncio
-    
     try:
         loop = asyncio.get_event_loop()
-        # Fetch the direct URL metadata without downloading the video
-        url_info = await loop.run_in_executor(
-            None,
-            lambda: get_direct_url(url)
-        )
+        data = await loop.run_in_executor(None, lambda: get_tiktok_info(url))
+        return {"success": True, "data": data}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    direct_url = url_info.get("direct_url")
-    if not direct_url:
-        raise HTTPException(status_code=500, detail="Could not resolve direct URL")
-        
-    filename = url_info.get("filename", "video.mp4")
-    cdn_headers = url_info.get("http_headers", {})
+
+@app.get("/api/stream")
+async def stream_video_get(url: str, direct_url: Optional[str] = None):
+    """
+    Server-side GET proxy stream for aggressive CDNs that block mobile fetching.
+    Proxies the CDN video directly to the React Native app chunk-by-chunk without
+    saving to the server disk — avoiding 403 crashes and memory/disk limits.
+
+    Optional `direct_url` param: when provided (pre-resolved by /api/get-direct-url),
+    skips the second TikWM API call entirely for faster response.
+    """
+    from urllib.parse import quote
+    import re
+
+    cdn_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://www.tikwm.com/",
+    }
+    filename = "video.mp4"
+
+    if direct_url:
+        # Fast path: caller already resolved the CDN URL, skip API call
+        resolved_url = direct_url
+    else:
+        # Slow path: resolve via get_direct_url (may call TikWM API)
+        try:
+            loop = asyncio.get_event_loop()
+            url_info = await loop.run_in_executor(None, lambda: get_direct_url(url))
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        resolved_url = url_info.get("direct_url")
+        if not resolved_url:
+            raise HTTPException(status_code=500, detail="Could not resolve direct URL")
+
+        filename = url_info.get("filename", "video.mp4")
+        cdn_headers.update(url_info.get("http_headers", {}))
 
     ascii_filename = re.sub(r'[^\x00-\x7F]+', '_', filename)
     encoded_filename = quote(filename)
     content_disposition = f'attachment; filename="{ascii_filename}"; filename*=UTF-8\'\'{encoded_filename}'
 
-    # Final Stability Mix: We open the GET stream first to extract the 100% accurate 
-    # Content-Length from THIS specific session. Metadata estimates are not good enough 
-    # for mobile finalization.
     client = httpx.AsyncClient(timeout=120.0, follow_redirects=True)
     try:
-        # Start the request to grab headers first
-        cdn_response = await client.stream("GET", direct_url, headers=cdn_headers)
-        
-        # Extract metadata directly from the active live response
+        # Use send(stream=True) — client.stream() is a context manager and cannot be awaited
+        request = client.build_request("GET", resolved_url, headers=cdn_headers)
+        cdn_response = await client.send(request, stream=True)
+
         actual_size = cdn_response.headers.get("Content-Length")
         actual_type = cdn_response.headers.get("Content-Type", "video/mp4")
-        
+
         if cdn_response.status_code not in (200, 206):
             await cdn_response.aclose()
             await client.aclose()
-            raise HTTPException(status_code=cdn_response.status_code, detail="CDN error")
+            raise HTTPException(status_code=cdn_response.status_code, detail=f"CDN returned {cdn_response.status_code}")
 
         async def stream_and_close_final():
             try:
-                # Use the response we already opened to ensure byte-perfect sync
                 async for chunk in cdn_response.aiter_bytes(chunk_size=65536):
                     yield chunk
             finally:
-                # Explicitly close both response and client once stream completes
                 await cdn_response.aclose()
                 await client.aclose()
 
@@ -194,7 +216,6 @@ async def stream_video_get(url: str):
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
         }
-        # Only attach Content-Length if the CDN explicitly provided it
         if actual_size:
             response_headers["Content-Length"] = actual_size
 
@@ -205,7 +226,8 @@ async def stream_video_get(url: str):
         )
     except Exception as e:
         await client.aclose()
-        if isinstance(e, HTTPException): raise
+        if isinstance(e, HTTPException):
+            raise
         raise HTTPException(status_code=500, detail=f"Streaming failed: {str(e)}")
 
 
